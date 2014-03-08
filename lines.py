@@ -2,6 +2,8 @@
 
 # a test of line intersection for the term project
 
+import copy
+
 ################################################################################
 ##### Point, Line, and Set Helper Functions ####################################
 ################################################################################
@@ -112,7 +114,9 @@ def intersectRayAndVertSegment(ray, segment):
     xSeg = float(x1) # = x2
     if (dx != 0):
         k = (xSeg - eyeX) / dx # vector form: pointOnLine = k*(dx,dy) + eye
-        if (k < 0): # intersects in wrong direction
+        print "k = ", k
+        if (k < 1):
+            # obstruction either behind or in wrong direction
             return None
         else:
             yIntercept = k*dy + eyeY
@@ -132,7 +136,8 @@ def intersectRayAndHorizSegment(ray, segment):
     ySeg = float(y1) # = y2
     if (dy != 0):
         k = (ySeg - eyeY) / dy # vector form: pointOnLine = k*(dx,dy) + eye
-        if (k < 0): # intersects in wrong direction
+        if (k < 1):
+            # obstruction either behind or in wrong direction
             return None
         else:
             xIntercept = k*dx + eyeX
@@ -158,58 +163,6 @@ def intersectRayAndRookSegment(ray, segment):
     else:
         return intersectRayAndHorizSegment(ray, segment)
 
-#def intersectLineAndVertSegment(line, segment):
-#    ((x1,y1), (x2,y2)) = segment
-#    (a,b,c) = line
-#    yMin = min(y1, y2)
-#    yMax = max(y1, y2)
-#    if (b != 0):
-#        yIntercept = float(c - a*x1)/b
-#        intersection = (x1, yIntercept)
-#    else: # line itself is vertical
-#        if (float(c/a) == float(x1)):
-#            # direct line of sight
-#            intersection = segment
-#        else:
-#            intersection = None
-#    return intersection
-#
-#def intersectLineAndHorizSegment(line, segment):
-#    ((x1,y1), (x2,y2)) = segment
-#    (a,b,c) = line
-#    xMin = min(x1, x2)
-#    xMax = max(x1, x2)
-#    if (a != 0):
-#        xIntercept = float(c - b*y1)/a
-#        intersection = (xIntercept, y1)
-#    else: # line itself is horizontal
-#        if (float(c/b) == float(y1)):
-#            # direct line of sight
-#            intersection = segment
-#        else:
-#            print "a,b,c:", a,b,c
-#            print "y1:", y1
-#            print "y2:", y2
-#            intersection = None
-#    return intersection
-
-#def intersectLineAndRookSegment(line, segment):
-#    # should not check if intersection lies on line
-#    #  that will be done by the chop functions
-#    # segments are a list of two 2-tuples:
-#    # rook segments are guaranteed to have either
-#    #  x1 = x2 or y1 = y2
-#    ((x1,y1), (x2,y2)) = segment
-#    (a,b,c) = line
-#    if (x1 != x2 and y1 != y2):
-#        assert(False), "not a rook segment"
-#    segType = "vert" if (x1==x2) else "horiz"
-#    if (segType == "vert"):
-#        print "vert"
-#        return intersectLineAndVertSegment(line, segment)
-#    else: # horizontal segment
-#        print "horiz"
-#        return intersectLineAndHorizSegment(line, segment)
 
 
 ################################################################################
@@ -259,45 +212,6 @@ def obstructSegViaSeg(eye, wall, segWithObstructions):
                          obstructViaIntersections(intersection1, seg),
                          obstructViaIntersections(intersection2, seg))
     return [seg, obstructions]
-
-
-
-#def obstructSegViaSeg(eyePoint, blockingSeg, segWithObstructions):
-#    #
-#    # WARNING: This function destructively
-#    #          modifies the set of obstructions!
-#    #
-#    # segWithObstructions is a list containing a segment
-#    #  and a set of "obstructions", i.e., points on the segment
-#    #  which have been obscured by walls
-#    (obstructedSeg, obstructions) = segWithObstructions
-#    (blockingP1, blockingP2) = blockingSeg
-#    print "blocking points:", blockingP1, blockingP2
-#    line1 = makeLine(eyePoint, blockingP1)
-#    line2 = makeLine(eyePoint, blockingP2)
-#    print "lines:",line1, line2
-#    intersection1 = intersectLineAndRookSegment(line1, obstructedSeg)
-#    intersection2 = intersectLineAndRookSegment(line2, obstructedSeg)
-#    if (intersection1 != None):
-#        print "intersect1:", intersection1
-#        obstructions.add(intersection1)
-#    if (intersection2 != None):
-#        print "intersect2:", intersection2
-#        obstructions.add(intersection2)
-#    if (intersection1 == intersection2 == None):
-#        # do nothing
-#    elif (intersection1 == None): # and int2 != None
-#        #### 
-#        #####
-#        #####
-#        ##### WEIRD
-#        #####
-#        #####
-#        ####
-#        # want to chop off entire half of line
-#    elif (intersection2 == None): # and int1 != None
-#        # want to chop off other half of line
-#    return [obstructedSeg, obstructions]
 
 def chopHorizSegWithObstructions(segWithObstructions):
     (segment, obstructions) = segWithObstructions
@@ -364,7 +278,6 @@ def chopVertSegWithObstructions(segWithObstructions):
     else:
         return set([segment])
 
-
 def chopSegWithObstructions(segWithObstructions):
     # we assume that the segment is a rook segment
     # we also assume that obstructions are on the line
@@ -408,13 +321,25 @@ def obstructSegViaSetOfSegs(eyePoint, setOfSegs, segment):
     print "-------------\n\n"
     return obSegSet
 
-        
-
-
+def obstructSegs(eyePoint, setOfSegs):
     # more optimization can be done by only obstructing farther segs
     #  by closer segs, but this is algorithmically difficult for the moment
     # this is currently O(n**2), but that optimization could cut in half the
     #  number of obstructing checks, but it would remain O(n**2)
+    visible = set()
+    for seg in setOfSegs:
+        remainingSegs = copy.copy(setOfSegs)
+        remainingSegs.remove(seg)
+        visible = visible.union(obstructSegViaSetOfSegs(eye,
+                                                        remainingSegs,
+                                                        seg))
+    return visible
+                                                    
+
+                                                                
+        
+
+
 
 
 ################################################################################
@@ -432,15 +357,15 @@ def obstructSegViaSetOfSegs(eyePoint, setOfSegs, segment):
 #wall1 = ((0,-1), (-1,-1))
 #print obstructSegViaSetOfSegs(eye, set([wall1]), seg)
 
-eye = (2.5,3.5)
-obSeg = ((1,5),(6,5))
-seg1 = ((1,0),(1,4))
-seg2 = ((2,3),(3,3))
-seg3 = ((3,4),(4,4))
-seg4 = ((3,3),(3,4))
-s = set([seg1, seg2, seg3, seg4])
+eye = (1,1)
+#obSeg = ((1,5),(6,5))
+seg1 = ((2,1),(2,2))
+seg2 = ((3,0),(3,4))
+seg3 = ((1,4),(4,4))
+seg4 = ((2,3),(5,3))
+segs = set([seg1, seg2, seg3, seg4])
 
-print obstructSegViaSetOfSegs(eye, s, obSeg)
+#print obstructSegViaSetOfSegs(eye, s, obSeg)
 
 
 #print chopSegWithObstructions(obstructSegViaSeg(eye, blockingSeg, [seg,set()]))
@@ -464,13 +389,19 @@ canvas.create_line(50*seg1[0][0], 50*seg1[0][1], 50*seg1[1][0], 50*seg1[1][1])
 canvas.create_line(50*seg2[0][0], 50*seg2[0][1], 50*seg2[1][0], 50*seg2[1][1])
 canvas.create_line(50*seg3[0][0], 50*seg3[0][1], 50*seg3[1][0], 50*seg3[1][1])
 canvas.create_line(50*seg4[0][0], 50*seg4[0][1], 50*seg4[1][0], 50*seg4[1][1])
-canvas.create_line(50*obSeg[0][0], 50*obSeg[0][1], 50*obSeg[1][0], 50*obSeg[1][1])
+#canvas.create_line(50*obSeg[0][0], 50*obSeg[0][1], 50*obSeg[1][0], 50*obSeg[1][1])
 
-colors = ["blue", "green", "red", "yellow", "cyan"]
+colors = ["blue", "green", "red", "yellow", "cyan", "orange", "magenta", "black", "purple", "brown", "white"]
 i = 0
-for s in obstructSegViaSetOfSegs(eye, s, obSeg):
+visible = obstructSegs(eye, segs)
+print "visible = ",visible
+for s in visible:
     canvas.create_line(50*s[0][0], 50*s[0][1], 50*s[1][0], 50*s[1][1], fill=colors[i], width=3)
     i += 1
+
+#for s in obstructSegViaSetOfSegs(eye, set([seg2]), seg1):
+#    canvas.create_line(50*s[0][0], 50*s[0][1], 50*s[1][0], 50*s[1][1], fill=colors[i], width=3)
+#    i += 1
 
 root.mainloop()
 
