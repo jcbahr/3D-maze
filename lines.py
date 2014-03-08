@@ -107,6 +107,10 @@ def isVertSeg(segment):
 ##### Line Intersection Functions ##############################################
 ################################################################################
 
+# NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE: k <= 1 is NOT SUFFICIENT
+# If one point has a k < 1 but the other has a k > 1, DIFFERENT THINGS HAPPEN
+# NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
+
 def intersectRayAndVertSegment(ray, segment):
     ((x1,y1), (x2,y2)) = segment
     (eye, (dx, dy)) = ray
@@ -115,7 +119,7 @@ def intersectRayAndVertSegment(ray, segment):
     if (dx != 0):
         k = (xSeg - eyeX) / dx # vector form: pointOnLine = k*(dx,dy) + eye
         print "k = ", k
-        if (k < 1):
+        if (k <= 1):
             # obstruction either behind or in wrong direction
             return None
         else:
@@ -136,7 +140,8 @@ def intersectRayAndHorizSegment(ray, segment):
     ySeg = float(y1) # = y2
     if (dy != 0):
         k = (ySeg - eyeY) / dy # vector form: pointOnLine = k*(dx,dy) + eye
-        if (k < 1):
+        print "k = ", k
+        if (k <= 1):
             # obstruction either behind or in wrong direction
             return None
         else:
@@ -192,8 +197,6 @@ def obstructViaIntersections(intersection, seg):
                 obstructions.add((maxX, segY1))
             else:
                 obstructions.add((minX, segY1))
-    else:
-        print "woah"
     return obstructions
 
 
@@ -328,6 +331,7 @@ def obstructSegs(eyePoint, setOfSegs):
     #  number of obstructing checks, but it would remain O(n**2)
     visible = set()
     for seg in setOfSegs:
+        # NOTE: Find improvement over copy.copy
         remainingSegs = copy.copy(setOfSegs)
         remainingSegs.remove(seg)
         visible = visible.union(obstructSegViaSetOfSegs(eye,
@@ -349,21 +353,26 @@ def obstructSegs(eyePoint, setOfSegs):
 
 
 
-#seg = ((0,0),(1,0))
-#obstructions = {(0.25,0),(0.75,0), (1.01, 0)}
-#print chopSegWithObstructions((seg,obstructions))
-
-#seg = ((0,8), (8,8))
-#wall1 = ((0,-1), (-1,-1))
-#print obstructSegViaSetOfSegs(eye, set([wall1]), seg)
+#eye = (1.2,1.2)
+#segs = set([((1,1),(6,1)),
+#            ((1,1),(1,6)),
+#            ((1,6),(6,6)),
+#            ((6,1),(6,6)),
+#            ((5,1),(5,2)),
+#            ((5,2),(3,2)),
+#            ((2,2),(2,4)),
+#            ((2,3),(5,3)),
+#            ((1,4),(2,4)),
+#            ((5,4),(6,4)),
+#            ((3,4),(3,5)),
+#            ((5,4),(5,5)),
+#            ((4,4),(4,6)),
+#            ((2,5),(4,5)),
+#            ((2,5),(2,6))])
 
 eye = (1,1)
-#obSeg = ((1,5),(6,5))
-seg1 = ((2,1),(2,2))
-seg2 = ((3,0),(3,4))
-seg3 = ((1,4),(4,4))
-seg4 = ((2,3),(5,3))
-segs = set([seg1, seg2, seg3, seg4])
+segs = set([((2,2),(2,4)),
+            ((2,3),(3,3))])
 
 #print obstructSegViaSetOfSegs(eye, s, obSeg)
 
@@ -377,7 +386,10 @@ root = Tk()
 canvas = Canvas(root, width=500, height=500)
 canvas.pack()
 
-canvas.create_text(50*eye[0], 50*eye[1], text=".", fill="red", font="Times 18")
+#canvas.create_text(50*eye[0], 50*eye[1], text=".", fill="red", font="Times 18")
+#canvas.create_text(50*eye[0], 50*eye[1], text=".", fill="red", font="Times 10")
+#canvas.create_text(50*eye[0], 50*eye[1], text=".", fill="red", font="Times 2")
+canvas.create_line(50*eye[0]-1, 50*eye[1]-1, 50*eye[0]+1, 50*eye[1]+1, fill="red", width=2)
 
 #canvas.create_line(50*eye[0], 50*eye[1], 50*seg1[0][0], 50*seg1[0][1], fill="red", width=2)
 #canvas.create_line(50*eye[0], 50*eye[1], 50*seg1[1][0], 50*seg1[1][1], fill="red", width=2)
@@ -385,11 +397,8 @@ canvas.create_text(50*eye[0], 50*eye[1], text=".", fill="red", font="Times 18")
 #canvas.create_line(50*eye[0], 50*eye[1], 50*seg2[1][0], 50*seg2[1][1], fill="red", width=2)
 #canvas.create_line(50*eye[0], 50*eye[1], 50*seg3[0][0], 50*seg3[0][1], fill="red", width=2)
 #canvas.create_line(50*eye[0], 50*eye[1], 50*seg3[1][0], 50*seg3[1][1], fill="red", width=2)
-canvas.create_line(50*seg1[0][0], 50*seg1[0][1], 50*seg1[1][0], 50*seg1[1][1])
-canvas.create_line(50*seg2[0][0], 50*seg2[0][1], 50*seg2[1][0], 50*seg2[1][1])
-canvas.create_line(50*seg3[0][0], 50*seg3[0][1], 50*seg3[1][0], 50*seg3[1][1])
-canvas.create_line(50*seg4[0][0], 50*seg4[0][1], 50*seg4[1][0], 50*seg4[1][1])
-#canvas.create_line(50*obSeg[0][0], 50*obSeg[0][1], 50*obSeg[1][0], 50*obSeg[1][1])
+for seg in segs:
+    canvas.create_line(50*seg[0][0], 50*seg[0][1], 50*seg[1][0], 50*seg[1][1])
 
 colors = ["blue", "green", "red", "yellow", "cyan", "orange", "magenta", "black", "purple", "brown", "white"]
 i = 0
@@ -398,6 +407,7 @@ print "visible = ",visible
 for s in visible:
     canvas.create_line(50*s[0][0], 50*s[0][1], 50*s[1][0], 50*s[1][1], fill=colors[i], width=3)
     i += 1
+    i %= 11
 
 #for s in obstructSegViaSetOfSegs(eye, set([seg2]), seg1):
 #    canvas.create_line(50*s[0][0], 50*s[0][1], 50*s[1][0], 50*s[1][1], fill=colors[i], width=3)
