@@ -9,15 +9,15 @@ import copy
 ################################################################################
 
 def isNumber(x):
-    return ((type(x) == int) or (type(x) == float)
-            or (type(x) == long))
+    """Returns True if x is an int, long, or float; False otherwise."""
+    return type(x) in (int, long, float)
 
 def sign(x):
-    # zero is considered positive
-    # it won't matter for the purposes of this program
+    """Returns "+" for non-negative numbers; "-" otherwise."""
     return "+" if (x >= 0) else "-"
 
 def isPoint(p):
+    """Returns True if p is of the form (x,y) where x and y are numbers."""
     if (type(p) != tuple):
         return False
     elif (len(p) != 2):
@@ -25,6 +25,7 @@ def isPoint(p):
     return isNumber(p[0]) and isNumber(p[1])
 
 def isSeg(seg):
+    """Returns True if seg is of the form (p,q) where p and q are points."""
     if (type(seg) != tuple):
         return False
     elif (len(seg) != 2):
@@ -34,31 +35,42 @@ def isSeg(seg):
 def makeSegment(p1,p2):
     return (p1,p2)
 
+def xKey(tuple):
+    (x,y) = tuple
+    return x
+
+def yKey(tuple):
+    (x,y) = tuple
+    return y
+
 def getElementFromSet(s):
-    # takes an arbitrary element in a set
-    #  without modifying the set
+    """Returns an arbitrary element in a set non-destructively"""
     for val in s:
         return val # breaks
 
 def minMaxXPoint(pointSet):
-    # return the min/max points of a set in a tuple
-    #  with respect to the x coordinate
-    # python does this by default
-    minPoint = min(pointSet)
-    maxPoint = max(pointSet)
+    """Returns the minimum and maximum points in a set of points with
+    respect to the first (x) coordinate."""
+    minPoint = min(pointSet, xKey)
+    maxPoint = max(pointSet, xKey)
     return (minPoint, maxPoint)
 
 def minMaxYPoint(pointSet):
-    # return the min/max points of a set in a tuple
-    #  with respect to the y coordinate
-    # can be remade with "key" of min(), max()
-    minPoint = maxPoint = getElementFromSet(pointSet)
-    for point in pointSet:
-        if (point[1] > maxPoint[1]):
-            maxPoint = point
-        elif (point[1] < minPoint[1]):
-            minPoint = point
+    """Returns the minimum and maximum points in a set of points with
+    respect to the second (y) coordinate."""
+    minPoint = min(pointSet, yKey)
+    maxPoint = max(pointSet, yKey)
     return (minPoint, maxPoint)
+
+def segmentType(seg):
+    if (not isSeg(seg)): return False
+    ((x1, y1), (x2, y2)) = seg
+    if (x1 == x2):
+        return "vert"
+    elif (y1 == y2):
+        return "horiz"
+    else:
+        assert(False), "not a rook segment"
 
 ################################################################################
 ##### Line Helper Functions ####################################################
@@ -119,9 +131,11 @@ def intersectRayAndVertSegment(ray, segment):
     if (dx != 0):
         k = (xSeg - eyeX) / dx # vector form: pointOnLine = k*(dx,dy) + eye
         print "k = ", k
-        if (k <= 1):
-            # obstruction either behind or in wrong direction
+        if (k < 0): # wall behind eye
             return None
+        elif (k <= 1): # wall behind segment
+            yIntercept = k*dy + eyeY
+            return ["behind", (xSeg, yIntercept)]
         else:
             yIntercept = k*dy + eyeY
             return (xSeg, yIntercept)
@@ -141,9 +155,11 @@ def intersectRayAndHorizSegment(ray, segment):
     if (dy != 0):
         k = (ySeg - eyeY) / dy # vector form: pointOnLine = k*(dx,dy) + eye
         print "k = ", k
-        if (k <= 1):
-            # obstruction either behind or in wrong direction
+        if (k < 0): # wall behind eye
             return None
+        elif (k <= 1): # wall behind segment
+            xIntercept = k*dx + eyeX
+            return ["behind", (xIntercept, ySeg)]
         else:
             xIntercept = k*dx + eyeX
             return (xIntercept, ySeg)
@@ -160,6 +176,7 @@ def intersectRayAndRookSegment(ray, segment):
     # returns a point of intersection
     #         a segment of intersection
     #      or "+infinity", "-infinity" for no intersection
+
     ((x1,y1), (x2,y2)) = segment
     if ((x1 != x2) and (y1 != y2)):
         assert(False), "not a rook segment"
@@ -167,6 +184,26 @@ def intersectRayAndRookSegment(ray, segment):
         return intersectRayAndVertSegment(ray, segment)
     else:
         return intersectRayAndHorizSegment(ray, segment)
+
+
+def intersectWalls(wall, seg):
+    # given two rook walls, finds the predicted intersection
+    # this is only for when one point is "behind" and the other is not
+    # note that wall and seg are both rook segments
+    #  their different names are for clarity only
+
+    ((wallX1, wallY1), (wallX2, wallY2)) = wall
+    ((segX1, segY1), (segX2, segY2)) = seg
+    wallType = segmentType(wall)
+    segType = segmentType(seg)
+    if (segType == wallType):
+        assert(False), "wall and seg not perpendicular"
+    elif (wallType == "horiz"):
+        return (segX1, wallY1)
+    else:
+        return (wallX1, segY1)
+
+
 
 
 
@@ -177,7 +214,7 @@ def intersectRayAndRookSegment(ray, segment):
 def obstructViaIntersections(intersection, seg):
     obstructions = set()
     ((segX1, segY1), (segX2, segY2)) = seg
-    segType = "vert" if (segX1 == segX2) else "horiz"
+    segType = segmentType(seg)
     maxY = max(segY1, segY2)
     minY = min(segY1, segY2)
     maxX = max(segX1, segX2)
@@ -197,12 +234,26 @@ def obstructViaIntersections(intersection, seg):
                 obstructions.add((maxX, segY1))
             else:
                 obstructions.add((minX, segY1))
+    elif (type(intersection) == list): # ["behind", intersection]
+        # calculate nearest seg edge
+        return ["behind", intersection]
+        # FIXME
+        # WHAT DO I DO HERE
+        # I should return a list with a "behind" keyword and
+        #  the closest point of the segment to the intersection
+        # NOTE: SHOULD IT BE CLOSEST?
+        # that way, if I get two behinds, I can give no obstructions
+        # otherwise, make the closest the obstruction
+        # NOTE: It should be the intersection!
     return obstructions
 
 
-def obstructSegViaSeg(eye, wall, segWithObstructions):
+def obstructSegViaSeg(eye, wall, seg):
     # "wall" is just shorthand for an obstructing segment
-    (seg, obstructions) = segWithObstructions
+    # when one point is behind the wall and the other is in front,
+    #  we instead obstruct with the front one and the point of intersection
+
+    obstructions = set()
     (wallP1, wallP2) = wall
     if ((eye == wallP1) or (eye == wallP2)):
         assert(False), "collision with wall edge"
@@ -211,9 +262,18 @@ def obstructSegViaSeg(eye, wall, segWithObstructions):
     ray2 = makeRay(eye, wallP2)
     intersection2 = intersectRayAndRookSegment(ray2, seg)
     print "rays:", ray1, ray2
-    obstructions = obstructions.union(
-                         obstructViaIntersections(intersection1, seg),
-                         obstructViaIntersections(intersection2, seg))
+    obstruct1 = obstructViaIntersections(intersection1, seg)
+    obstruct2 = obstructViaIntersections(intersection2, seg)
+    if (type(obstruct1) == type(obstruct2) == list): # both behind
+        obstruct1 = obstruct2 = set()
+    elif ((type(obstruct1) == list) and (type(obstruct2) != list)):
+        # 1st is behind
+        obstruct1 = set([intersectWalls(wall, seg)])
+    elif ((type(obstruct1) != list) and (type(obstruct2) == list)):
+        # 2nd is behind
+        obstruct2 = set([intersectWalls(wall, seg)])
+    print "obs:", obstruct1, obstruct2
+    obstructions = obstructions.union(obstruct1, obstruct2)
     return [seg, obstructions]
 
 def chopHorizSegWithObstructions(segWithObstructions):
@@ -312,7 +372,7 @@ def obstructSegViaSetOfSegs(eyePoint, setOfSegs, segment):
             print "against:",segPiece
             segWithObstructions = obstructSegViaSeg(eyePoint,
                                                     blockingSeg,
-                                                    [segPiece, set()])
+                                                    segPiece)
             # set() is the set of obstructions, but it's empty since we chop
             #  before we obscure again
             chopped = chopSegWithObstructions(segWithObstructions)
@@ -347,37 +407,62 @@ def obstructSegs(eyePoint, setOfSegs):
 
 
 ################################################################################
+##### TIMING ###################################################################
+################################################################################
+
+import time
+
+def timeFnCall(f, n, m):
+    # call f(n) and return time in ms
+    # Actually, since one call may require less than 1 ms,
+    # we'll keep calling until we get at least 1 secs,
+    # then divide by # of calls we had to make
+    calls = 0
+    start = end = time.time()
+    while (end - start < 1):
+        f(n, m)
+        calls += 1
+        end = time.time()
+    return float(end - start)/calls*1000 #(convert to ms)
+
+
+
+
+################################################################################
 ##### TESTING ##################################################################
 ################################################################################
+
+
+
         
 
 
 
-#eye = (1.2,1.2)
-#segs = set([((1,1),(6,1)),
-#            ((1,1),(1,6)),
-#            ((1,6),(6,6)),
-#            ((6,1),(6,6)),
-#            ((5,1),(5,2)),
-#            ((5,2),(3,2)),
-#            ((2,2),(2,4)),
-#            ((2,3),(5,3)),
-#            ((1,4),(2,4)),
-#            ((5,4),(6,4)),
-#            ((3,4),(3,5)),
-#            ((5,4),(5,5)),
-#            ((4,4),(4,6)),
-#            ((2,5),(4,5)),
-#            ((2,5),(2,6))])
+eye = (5.2,1.2)
+segs = set([((1,1),(6,1)),
+            ((1,1),(1,6)),
+            ((1,6),(6,6)),
+            ((6,1),(6,6)),
+            ((5,1),(5,2)),
+            ((5,2),(3,2)),
+            ((2,2),(2,4)),
+            ((2,3),(5,3)),
+            ((1,4),(2,4)),
+            ((5,4),(6,4)),
+            ((3,4),(3,5)),
+            ((5,4),(5,5)),
+            ((4,4),(4,6)),
+            ((2,5),(4,5)),
+            ((2,5),(2,6))])
 
-eye = (1,1)
-segs = set([((2,2),(2,4)),
-            ((2,3),(3,3))])
+#eye = (1,1)
+#segs = set([((2,2),(2,4)),
+#            ((2,3),(3,3))])
 
 #print obstructSegViaSetOfSegs(eye, s, obSeg)
 
 
-#print chopSegWithObstructions(obstructSegViaSeg(eye, blockingSeg, [seg,set()]))
+#print chopSegWithObstructions(obstructSegViaSeg(eye, blockingSeg, seg))
 #print obstructSegWithObstructionsViaSeg(eye, blockingSeg, [seg,set()])
 #print makeLine(eye, (1,1))
 
