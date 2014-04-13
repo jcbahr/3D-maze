@@ -63,7 +63,7 @@ class Point(object):
 
 class Seg(object):
     def __init__(self, p1, p2):
-        # error checking
+        # sanity check
         if not (type(p1) == type(p2) == Point):
             assert(False), "cannot make a seg from nonpoints"
         if (p1 == p2):
@@ -106,41 +106,196 @@ class Ray(object):
 
 
 class Intersection(object):
-    # represents an intersection, which can be either "behind" or "normal"
+    # represents an intersection of a ray and a wall, which can be either 
+    # "normal" - ray.eye --- ray.target --- wall
+    #   this should usually obscure the wall
+    # "behind" - ray.eye --- wall --- ray.target
+    #   the wall is generall in front of the obstruction
+    # "backwards" - wall --- ray.eye --- ray.target
+    #   this generally does not obscure the wall
+    # "infinity"
+    #   the ray and wall are parallel
     def __init__(self, point, kind):
         self.point = point
-        self.kind = kind
-
-class InfIntersection(object):
-    # "infinity intersection", which is represented as an
-    # ordered pair with either +1, -1, or 0 in each spot.  These represent
-    # an intersection at infinity"""
-    def __init__(self, dx, dy):
-        if (dx == dy == 0):
-            assert(False), "not an infinity intersection"""
-        self.dx = dx
-        self.dy = dy
+        self.kind = kind # str
 
     def __eq__(self, other):
-        return ((self.dx == other.dx) and (self.dy == other.dy))
+        return ((self.kind == other.kind) and (self.point == other.point))
 
     def __str__(self):
-        if (self.dx == 0):
-            return "(0,"+str(sign(self.dy))+"inf)"
-        elif (self.dy == 0):
-            return "("+str(sign(self.dx))+"inf,0)"
+        if (self.kind == "infinity"):
+            if (self.dx == 0):
+                return "(0,"+str(sign(self.point.y))+"inf)"
+            elif (self.dy == 0):
+                return "("+str(sign(self.point.x))+"inf,0)"
+        else:
+            return "(%f,%f)" % (self.point.x, self.point.y)
 
     def __repr__(self):
-        return "InfIntersection(%d,%d)" % (self.dx, self.dy)
+        return "Intersection(%s,%s)" % (str(repr(self.point)), self.kind)
 
+        
 
 
 ################################################################################
 ##### Line Intersection Functions ##############################################
 ################################################################################
 
-def intersectRayAndSegment(ray, segment):
-    """Given a ray and a segment, return two intersections"""
+
+
+def intersectRayAndVertSegment(ray, segment):
+    """Given a ray and a "vert" segment, return an intersection, unless
+    the ray and segment are collinear, at which point this will return
+    the entire segment"""
+    # sanity check
+    if (not segment.isVert):
+        assert(False), "not a vertical segment"
+    if (ray.dx != 0):
+        # Note that segment.p1.x == segment.p2.x since it is vertical
+        # pointOnLine = k*(dx,dy) + eye.  This solves for k:
+        k = (segment.p1.x - ray.eye.x) / float(ray.dx)
+        yIntercept = k*ray.dy + ray.eye.y
+        intPoint = Point(segment.p1.x, yIntercept)
+        if (k < 0):
+            return Intersection(intPoint, "backwards")
+        elif (k < 1):
+            return Intersection(intPoint, "behind")
+        else:
+            return Intersection(intPoint, "normal")
+    else:
+        if (segment.p1.x == ray.eye.x):
+            # collinear!
+            return segment
+        else:
+            yIntercept = 1 if (ray.dy > 0) else -1
+            return Intersection(Point(0,yIntercept), "infinity")
+
+
+def intersectRayAndHorizSegment(ray, segment):
+    """Given a ray and a "horiz" segment, return an intersection, unless
+    the ray and segment are collinear, at which point this will return
+    the entire segment"""
+    # sanity check
+    if (not segment.isHoriz):
+        assert(False), "not a horizontal segment"
+    if (ray.dy != 0):
+        # Note that segment.p1.y == segment.p2.y since it is horizontal
+        # pointOnLine = k*(dx,dy) + eye.  This solves for k:
+        k = (segment.p1.y - ray.eye.y) / float(ray.dy)
+        xIntercept = k*ray.dx + ray.eye.x
+        intPoint = Point(xIntercept, segment.p1.y)
+        if (k < 0):
+            return Intersection(intPoint, "backwards")
+        elif (k < 1):
+            return Intersection(intPoint, "behind")
+        else:
+            return Intersection(intPoint, "normal")
+    else:
+        if (segment.p1.y == ray.eye.y):
+            # collinear!
+            return segment
+        else:
+            xIntercept = 1 if (ray.dx > 0) else -1
+            return Intersection(Point(xIntercept,0), "infinity")
+
+def intersectRayAndRookSeg(ray, segment):
+    """Given a ray and a rook segment, returns their intersection.  The point
+    of intersection is not guaranteed to lie on the segment."""
+    if (segment.isHoriz):
+        return intersectRayAndHorizSegment(ray, segment)
+    elif (segment.isVert):
+        return intersectRayAndVertSegment(ray, segment)
+    else:
+        assert(False), "not a rook segment"
+
+def intersectWalls(seg1, seg2):
+    """Given two orthogonal rook segs, returns the predicted
+    intersection (if they were to stretch into lines)"""
+    if (seg1.kind() == seg2.kind()):
+        assert(False), "segs not perpendicular"
+    if ((seg1.kind() == "other") or (seg2.kind() == "other")):
+        assert(False), "not rook segments"
+    elif (seg1.isHoriz):
+        return Point(seg1.p1.x, seg2.p1.y)
+    elif (seg1.isVert):
+        return (seg2.p1.x, seg1.p1.y)
+    else:
+        # should never happen
+        assert(False), "ERROR!"
+
+
+################################################################################
+##### Line Intersection Functions ##############################################
+################################################################################
+
+
+def obstructViaIntersections(cross1, cross2, seg):
+    """Given two intersections and a segment, return a set containing the
+    portions on the segment."""
+    # sanity check
+    if ((type(cross1) != Intersection) or (type(cross2) != Intersection)):
+        assert(False), "received non-intersections"
+    elif (type(seg) != Seg):
+        assert(False), "received non-segment"
+    # I recognize this is AWFUL style, but I can't think of another
+    #  way to handle these cases
+    # Most of these cases are really distinct
+    if (type(cross1) == "normal"):
+        if (type(cross2) == "normal"):
+            return normNormIntersect(cross1,cross2,seg)
+        elif (type(cross2) == "behind"):
+            return normBehindIntersect(cross1,cross2,seg)
+        elif (type(cross2) == "backwards"):
+            return normBackIntersect(cross1,cross2,seg)
+        elif (type(cross2) == "infinity"):
+            return normInfIntersect(cross1,cross2,seg)
+    elif (type(cross1) == "behind"):
+        if (type(cross2) == "normal"):
+            return normBehindIntersect(cross2,cross1,seg)
+        elif (type(cross2) == "behind"):
+            return behindBehindIntersect(cross1,cross2,seg)
+        elif (type(cross2) == "backwards"):
+            return behindBackIntersect(cross1,cross2,seg)
+        elif (type(cross2) == "infinity"):
+            return behindInfIntersect(cross1,cross2,seg)
+    elif (type(cross1) == "backwards"):
+        if (type(cross2) == "normal"):
+            return normBackIntersect(cross2,cross1,seg)
+        elif (type(cross2) == "behind"):
+            return behindBackIntersect(cross2,cross1,seg)
+        elif (type(cross2) == "backwards"):
+            return backBackIntersect(cross1,cross2,seg)
+        elif (type(cross2) == "infinity"):
+            return backInfIntersect(cross1,cross2,seg)
+    elif (type(cross1) == "infinity"):
+        if (type(cross2) == "normal"):
+            return normInfIntersect(cross2,cross1,seg)
+        elif (type(cross2) == "behind"):
+            return behindInfIntersect(cross2,cross1,seg)
+        elif (type(cross2) == "backwards"):
+            return backInfIntersect(cross2,cross1,seg)
+        elif (type(cross2) == "infinity"):
+            return infInfIntersect(cross1,cross2,seg)
+
+def normNormIntersect(cross1,cross2,seg):
+    # sanity check
+    if ((type(cross1) != Intersection) or (type(cross2) != Intersection)):
+        assert(False), "received non-intersections"
+    if (type(seg) != Seg):
+        assert(False), "received non-seg"
+    if (seg.isVert):
+        return normNormVertIntersection(cross1,cross2,seg)
+    elif (seg.isHoriz):
+        return normNormHorizIntersection(cross1,cross2,seg)
+
+def normNormHorizIntersect(cross1,cross2,seg):
+    pass
+
+def normNormVertIntersection(cross1,cross2,seg):
+    pass
+
+
+
 
 
 

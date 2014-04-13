@@ -193,7 +193,7 @@ def intersectWalls(wall, seg):
 ################################################################################
 
 def obstructViaIntersections(intersection, seg):
-    """Given an intersection and a segment, returns a set of points on the
+    """Given intersections and a segment, returns a set of points on the
     segment corresponding to the intersection.  This handles the +/- infinity
     cases as well as the "behind" case."""
     obstructions = set()
