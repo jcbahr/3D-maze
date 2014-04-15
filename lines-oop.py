@@ -358,7 +358,34 @@ def normBehindIntersect(cross,behindCross,wall,seg):
     newCross = intersectWalls(wall,seg)
     return normNormIntersect(cross, newCross, wall, seg)
 
-def normBackIntersect(cross1,cross2,wall,seg):
+def normBackIntersect(cross,backCross,wall,seg):
+    # we want to find the remaining portion of the seg
+    #  on the opposite side of the backCross
+    if (seg.isVert):
+        return normBackVertIntersection(cross,backCross,wall,seg)
+    elif (seg.isHoriz):
+        return normBackHorizIntersection(cross,backCross,wall,seg)
+    else:
+        assert(False), "seg should be vert or horiz"
+
+def normBackVertIntersection(cross, backCross, wall, seg):
+    segSet = set([seg.p1, seg.p2])
+    (minSegPoint, maxSegPoint) = extremeY(segSet)
+    if (backCross.point.y < cross.point.y):
+        # want top half of line
+        return set(Seg(cross.point, maxSegPoint))
+    else:
+        return set(Seg(cross.point, minSegPoint))
+
+def normBackHorizIntersection(cross, backCross, wall, seg):
+    segSet = set([seg.p1, seg.p2])
+    (minSegPoint, maxSegPoint) = extremeX(segSet)
+    if (backCross.point.x < cross.point.x):
+        # want right half of line
+        return set(Seg(cross.point, maxSegPoint))
+    else:
+        return set(Seg(cross.point, minSegPoint))
+    
 
 
 
