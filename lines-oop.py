@@ -73,6 +73,14 @@ class Seg(object):
         self.isVert = (self.kind() == "vert")
         self.isHoriz = (self.kind() == "horiz")
 
+    def __eq__(self, other):
+        if ((self.p1 == other.p1) and (self.p2 == other.p2)):
+            return True
+        elif ((self.p1 == other.p2) and (self.p2 == other.p1)): 
+            return True
+        else:
+            return False
+
     def __str__(self):
         return "(%f,%f)-(%f,%f)" % (self.p1.x, self.p1.y,
                                    self.p2.x, self.p2.y)
@@ -92,6 +100,7 @@ class Seg(object):
         else:
             return "other"
 
+
 class Ray(object):
     def __init__(self, eye, target):
         if (eye == target):
@@ -110,7 +119,7 @@ class Intersection(object):
     # "normal" - ray.eye --- ray.target --- wall
     #   this should usually obscure the wall
     # "behind" - ray.eye --- wall --- ray.target
-    #   the wall is generall in front of the obstruction
+    #   the wall is generally in front of the obstruction
     # "backwards" - wall --- ray.eye --- ray.target
     #   this generally does not obscure the wall
     # "infinity"
@@ -218,7 +227,7 @@ def intersectWalls(seg1, seg2):
     elif (seg1.isHoriz):
         return Point(seg1.p1.x, seg2.p1.y)
     elif (seg1.isVert):
-        return (seg2.p1.x, seg1.p1.y)
+        return Point(seg2.p1.x, seg1.p1.y)
     else:
         # should never happen
         assert(False), "ERROR!"
@@ -229,9 +238,10 @@ def intersectWalls(seg1, seg2):
 ################################################################################
 
 
-def obstructViaIntersections(cross1, cross2, seg):
-    """Given two intersections and a segment, return a set containing the
-    portions on the segment."""
+def obstructViaIntersections(cross1, cross2, wall, seg):
+    """Given two intersections, a wall, and a segment, return a set containing the
+    portions on the segment.  The wall is what obscured the segment to produce
+    the two intersections (which are collinear with the seg)."""
     # sanity check
     if ((type(cross1) != Intersection) or (type(cross2) != Intersection)):
         assert(False), "received non-intersections"
@@ -242,42 +252,42 @@ def obstructViaIntersections(cross1, cross2, seg):
     # Most of these cases are really distinct
     if (type(cross1) == "normal"):
         if (type(cross2) == "normal"):
-            return normNormIntersect(cross1,cross2,seg)
+            return normNormIntersect(cross1,cross2,wall,seg)
         elif (type(cross2) == "behind"):
-            return normBehindIntersect(cross1,cross2,seg)
+            return normBehindIntersect(cross1,cross2,wall,seg)
         elif (type(cross2) == "backwards"):
-            return normBackIntersect(cross1,cross2,seg)
+            return normBackIntersect(cross1,cross2,wall,seg)
         elif (type(cross2) == "infinity"):
-            return normInfIntersect(cross1,cross2,seg)
+            return normInfIntersect(cross1,cross2,wall,seg)
     elif (type(cross1) == "behind"):
         if (type(cross2) == "normal"):
-            return normBehindIntersect(cross2,cross1,seg)
+            return normBehindIntersect(cross2,cross1,wall,seg)
         elif (type(cross2) == "behind"):
-            return behindBehindIntersect(cross1,cross2,seg)
+            return behindBehindIntersect(cross1,cross2,wall,seg)
         elif (type(cross2) == "backwards"):
-            return behindBackIntersect(cross1,cross2,seg)
+            return behindBackIntersect(cross1,cross2,wall,seg)
         elif (type(cross2) == "infinity"):
-            return behindInfIntersect(cross1,cross2,seg)
+            return behindInfIntersect(cross1,cross2,wall,seg)
     elif (type(cross1) == "backwards"):
         if (type(cross2) == "normal"):
-            return normBackIntersect(cross2,cross1,seg)
+            return normBackIntersect(cross2,cross1,wall,seg)
         elif (type(cross2) == "behind"):
-            return behindBackIntersect(cross2,cross1,seg)
+            return behindBackIntersect(cross2,cross1,wall,seg)
         elif (type(cross2) == "backwards"):
-            return backBackIntersect(cross1,cross2,seg)
+            return backBackIntersect(cross1,cross2,wall,seg)
         elif (type(cross2) == "infinity"):
-            return backInfIntersect(cross1,cross2,seg)
+            return backInfIntersect(cross1,cross2,wall,seg)
     elif (type(cross1) == "infinity"):
         if (type(cross2) == "normal"):
-            return normInfIntersect(cross2,cross1,seg)
+            return normInfIntersect(cross2,cross1,wall,seg)
         elif (type(cross2) == "behind"):
-            return behindInfIntersect(cross2,cross1,seg)
+            return behindInfIntersect(cross2,cross1,wall,seg)
         elif (type(cross2) == "backwards"):
-            return backInfIntersect(cross2,cross1,seg)
+            return backInfIntersect(cross2,cross1,wall,seg)
         elif (type(cross2) == "infinity"):
-            return infInfIntersect(cross1,cross2,seg)
+            return infInfIntersect(cross1,cross2,wall,seg)
 
-def normNormIntersect(cross1,cross2,seg):
+def normNormIntersect(cross1,cross2,wall,seg):
     # sanity check
     if ((type(cross1) != Intersection) or (type(cross2) != Intersection)):
         assert(False), "received non-intersections"
@@ -289,12 +299,66 @@ def normNormIntersect(cross1,cross2,seg):
         return normNormHorizIntersection(cross1,cross2,seg)
 
 def normNormHorizIntersect(cross1,cross2,seg):
-    pass
+    crossPoint1 = cross1.point
+    crossPoint2 = cross2.point
+    segSet = set([seg.p1, seg.p2])
+    crossSet = set([crossPoint1, crossPoint2])
+    (minSegPoint, maxSegPoint) = extremeX(segSet)
+    (minCrossPoint, maxCrossPoint) = extremeX(crossSet)
+    if (minCrossPoint.x < minSegPoint.x):
+        if (maxCrossPoint.x < minSegPoint.x):
+            # nothing obscured
+            return set(seg)
+        elif (maxCrossPoint.x < maxSegPoint.x):
+            # obscured on left
+            return set(Seg(maxCrossPoint, maxSegPoint))
+        else:
+            # entirely obscured
+            return set()
+    elif (minCrossPoint.x < maxSegPoint.x):
+        if (maxCrossPoint.x < maxSegPoint.x):
+            # centrally obscured
+            return set([Seg(minSegPoint,minCrossPoint),
+                        Seg(maxCrossPoint,maxSegPoint)])
+        else:
+            # obscured on right
+            return set(Seg(minSegPoint,minCrossPoint))
+    else:
+        return set()
 
 def normNormVertIntersection(cross1,cross2,seg):
-    pass
+    crossPoint1 = cross1.point
+    crossPoint2 = cross2.point
+    segSet = set([seg.p1, seg.p2])
+    crossSet = set([crossPoint1, crossPoint2])
+    (minSegPoint, maxSegPoint) = extremeY(segSet)
+    (minCrossPoint, maxCrossPoint) = extremeY(crossSet)
+    if (minCrossPoint.y < minSegPoint.x):
+        if (maxCrossPoint.y < minSegPoint.x):
+            # nothing obscured
+            return set(seg)
+        elif (maxCrossPoint.y < maxSegPoint.x):
+            # obscured on left
+            return set(Seg(maxCrossPoint, maxSegPoint))
+        else:
+            # entirely obscured
+            return set()
+    elif (minCrossPoint.y < maxSegPoint.x):
+        if (maxCrossPoint.y < maxSegPoint.x):
+            # centrally obscured
+            return set([Seg(minSegPoint,minCrossPoint),
+                        Seg(maxCrossPoint,maxSegPoint)])
+        else:
+            # obscured on right
+            return set(Seg(minSegPoint,minCrossPoint))
+    else:
+        return set()
 
+def normBehindIntersect(cross,behindCross,wall,seg):
+    newCross = intersectWalls(wall,seg)
+    return normNormIntersect(cross, newCross, wall, seg)
 
+def normBackIntersect(cross1,cross2,wall,seg):
 
 
 
