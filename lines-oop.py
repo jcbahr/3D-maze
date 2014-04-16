@@ -156,6 +156,7 @@ def intersectRayAndVertSegment(ray, segment):
     """Given a ray and a "vert" segment, return an intersection, unless
     the ray and segment are collinear, at which point this will return
     the entire segment"""
+    ### NOTE:  The "eye" is forbidden from lying on a segment ###
     # sanity check
     if (not segment.isVert):
         assert(False), "not a vertical segment"
@@ -387,7 +388,148 @@ def normBackHorizIntersection(cross, backCross, wall, seg):
         return set(Seg(cross.point, minSegPoint))
     
 
+def normInfIntersect(cross,infCross,wall,seg):
+    # we want to find the remaining portion of the seg
+    #  on the opposite side of the infCross
+    if (seg.isVert):
+        return normInfVertIntersection(cross,infCross,wall,seg)
+    elif (seg.isHoriz):
+        return normInfHorizIntersection(cross,infCross,wall,seg)
+    else:
+        assert(False), "seg should be vert or horiz"
+
+def normInfVertIntersection(cross, infCross, wall, seg):
+    segSet = set([seg.p1, seg.p2])
+    (minSegPoint, maxSegPoint) = extremeY(segSet)
+    if (infCross.point.y > 0):
+        # obscured above cross
+        return set(Seg(minSegPoint, cross.point))
+    elif (infCross.point.y < 0):
+        # obscured below cross
+        return set(Seg(cross.point, maxSegPoint))
+    else:
+        assert(False), "infCross should be vertical"
 
 
+def normInfHorizIntersection(cross, infCross, wall, seg):
+    segSet = set([seg.p1, seg.p2])
+    (minSegPoint, maxSegPoint) = extremeX(segSet)
+    if (infCross.point.x > 0):
+        # obscured to right of cross
+        return set(Seg(minSegPoint, cross.point))
+    elif (infCross.point.x < 0):
+        # obscured to left of cross
+        return set(Seg(cross.point, maxSegPoint))
+    else:
+        assert(False), "infCross should be horizontal"
+
+def behindBehindIntersect(behindCross1,behindCross2,wall,seg):
+    # the (obstructing) wall is behind the seg
+    # so nothing is obstructed
+    return set(seg)
+
+def behindBackIntersect(behindCross,backCross,wall,seg):
+    # requires a picture to understand:
+    #  *** ###|
+    #  ***.###|
+    #  *** ###|
+    # if . is the eye and | represents the obstructing wall:
+    #  backCross must be in the * section
+    #  behindCross must be in the # section
+    # (The eye may not be in a seg)
+    # We must remove the part of the seg that extends beyond the wall
+    if (seg.isVert):
+        return behindBackVertIntersection(behindCross,backCross,wall,seg)
+    elif (seg.isHoriz):
+        return behindBackHorizIntersection(behindCross,backCross,wall,seg)
+    else:
+        assert(False), "seg should be vert or horiz"
+
+def behindBackVertIntersection(behindCross, backCross, wall, seg):
+    newCross = intersectWalls(wall, seg)
+    crossSet = set([newCross.point, behindCross.point, backCross.point])
+    (minCrossPoint, maxCrossPoint) = extremeY(crossSet)
+    if (wall.p1.y > behindCross.point.y):
+        # wall crosses above
+        # (could choose backCross, also)
+        # quick check
+        if (wallp1.y <= behindCross.point.y): assert(False), "Logical error"
+        (botSegPoint,topSegPoint) = extremeY(set([seg.p1,seg.p2]))
+        topPoint = extremeY(set([topSegPoint, newCross]))[0] # min
+        return set(Seg(botSegPoint, topPoint))
+    else:
+        (botSegPoint,topSegPoint) = extremeY(set([seg.p1,seg.p2]))
+        botPoint = extremeY(set([topSegPoint, newCross]))[1] # max
+        return set(Seg(botPoint, topSegPoint))
+
+
+def behindBackHorizIntersection(behindCross, backCross, wall, seg):
+    newCross = intersectWalls(wall, seg)
+    crossSet = set([newCross.point, behindCross.point, backCross.point])
+    (minCrossPoint, maxCrossPoint) = extremeX(crossSet)
+    if (wall.p1.x > behindCross.point.x):
+        # wall crosses to right
+        # (could choose backCross, also)
+        # quick check
+        if (wallp1.x <= behindCross.point.x): assert(False), "Logical error"
+        (botSegPoint,topSegPoint) = extremeX(set([seg.p1,seg.p2]))
+        topPoint = extremeX(set([topSegPoint, newCross]))[0] # min
+        return set(Seg(botSegPoint, topPoint))
+    else:
+        (botSegPoint,topSegPoint) = extremeX(set([seg.p1,seg.p2]))
+        botPoint = extremeX(set([topSegPoint, newCross]))[1] # max
+        return set(Seg(botPoint, topSegPoint))
+
+
+
+def behindInfIntersect(behindCross,infCross,wall,seg):
+    # requires a picture:
+    #  .###|
+    #  *###|
+    #  *###|
+    # the infCross must be in the * section
+    # the behindCross must be in the * section
+    # any portion of the segment that extends beyond the wall is obscured
+    #  just like with the behindBackIntersect
+    if (seg.isVert):
+        return behindInfVertIntersection(behindCross,backCross,wall,seg)
+    elif (seg.isHoriz):
+        return behindInfHorizIntersection(behindCross,backCross,wall,seg)
+    else:
+        assert(False), "seg should be vert or horiz"
+
+
+def behindInfVertIntersection(behindCross,infCross,wall,seg):
+    segPointSet = set([seg.p1, seg.p2])
+    (minSegPoint, maxSegPoint) = extremeX(segPointSet)
+    cross = intersectWalls(wall,seg)
+    if (infCross.y > 1):
+        # wall above eye
+        upperPointSet = set([maxSegPoint,cross])
+        (minUpperPoint, maxUpperPoint) = extremeY(upperPointSet)
+        return set(minSegPoint, minUpperPoint)
+    elif (infCross.y < 1):
+        lowerPointSet = set([minSegPoint,cross])
+        (minLowerPoint, maxLowerPoint) = extremeY(lowerPointSet)
+        return set(maxLowerPoint, maxSegPoint)
+    else:
+        assert(False), "infCross should be vertical"
+        
+
+def behindInfHorizIntersection(behindCross,infCross,wall,seg):
+    segPointSet = set([seg.p1, seg.p2])
+    (minSegPoint, maxSegPoint) = extremeY(segPointSet)
+    cross = intersectWalls(wall,seg)
+    if (infCross.x > 1):
+        # wall above eye
+        upperPointSet = set([maxSegPoint,cross])
+        (minUpperPoint, maxUpperPoint) = extremeX(upperPointSet)
+        return set(minSegPoint, minUpperPoint)
+    elif (infCross.x < 1):
+        lowerPointSet = set([minSegPoint,cross])
+        (minLowerPoint, maxLowerPoint) = extremeX(lowerPointSet)
+        return set(maxLowerPoint, maxSegPoint)
+    else:
+        assert(False), "infCross should be horizontal"
 
 
