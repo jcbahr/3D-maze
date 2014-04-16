@@ -507,11 +507,11 @@ def behindInfVertIntersection(behindCross,infCross,wall,seg):
         # wall above eye
         upperPointSet = set([maxSegPoint,cross])
         (minUpperPoint, maxUpperPoint) = extremeY(upperPointSet)
-        return set(minSegPoint, minUpperPoint)
+        return set(Seg(minSegPoint, minUpperPoint))
     elif (infCross.y < 1):
         lowerPointSet = set([minSegPoint,cross])
         (minLowerPoint, maxLowerPoint) = extremeY(lowerPointSet)
-        return set(maxLowerPoint, maxSegPoint)
+        return set(Seg(maxLowerPoint, maxSegPoint))
     else:
         assert(False), "infCross should be vertical"
         
@@ -524,12 +524,23 @@ def behindInfHorizIntersection(behindCross,infCross,wall,seg):
         # wall above eye
         upperPointSet = set([maxSegPoint,cross])
         (minUpperPoint, maxUpperPoint) = extremeX(upperPointSet)
-        return set(minSegPoint, minUpperPoint)
+        return set(Seg(minSegPoint, minUpperPoint))
     elif (infCross.x < 1):
         lowerPointSet = set([minSegPoint,cross])
         (minLowerPoint, maxLowerPoint) = extremeX(lowerPointSet)
-        return set(maxLowerPoint, maxSegPoint)
+        return set(Seg(maxLowerPoint, maxSegPoint))
     else:
         assert(False), "infCross should be horizontal"
+
+def backBackIntersect(backCross1,backCross2,wall,seg):
+    return set(seg)
+            
+def backInfIntersect(backCross,infCross,wall,seg):
+    return set(seg)
+
+def infInfIntersect(infCross1,infCross2,wall,seg):
+    # eye is collinear with wall, which is parallel to seg
+    return set(seg)
+
 
 
