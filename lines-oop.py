@@ -630,6 +630,9 @@ def obstructSeg(eye, wall, seg):
     ray2 = Ray(eye, wall.p2)
     cross1 = intersectRayAndRookSeg(ray1, seg)
     cross2 = intersectRayAndRookSeg(ray2, seg)
+    if ((type(cross1) == Seg) or (type(cross2) == Seg)):
+        # something obscured entire segment
+        return set()
     print "\t\tCurrently Obstructing", seg
     print "\t\twith wall", wall
     print "\t\tAt intersections", cross1.point, cross1.kind
@@ -687,7 +690,7 @@ def run():
     root.mainloop()
 
 def init():
-    canvas.eye = Point(1,4.9)
+    canvas.eye = Point(1,5)
     canvas.segs = set([Seg(Point(4,1),Point(4,5)),
                        Seg(Point(3,1),Point(3,3)),
                        #Seg(Point(4,1),Point(4,5)),
@@ -696,6 +699,7 @@ def init():
                        Seg(Point(4,7),Point(3,7)),
                        Seg(Point(3,4),Point(3,7)),
                        Seg(Point(8,1),Point(8,5)),
+                       Seg(Point(4,5),Point(6,5)),
                        Seg(Point(1,4),Point(5,4))])
     
 def timerFired():
