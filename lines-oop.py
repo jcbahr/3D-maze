@@ -356,8 +356,8 @@ def normNormVertIntersect(cross1,cross2,seg):
             print "nothing obscured"
             return set([seg])
         elif (maxCrossPoint.y < maxSegPoint.y):
-            # obscured on left
-            print "obscured on left"
+            # obscured on top
+            print "obscured on top"
             return set([Seg(maxCrossPoint, maxSegPoint)])
         else:
             # entirely obscured
@@ -370,8 +370,8 @@ def normNormVertIntersect(cross1,cross2,seg):
             return set([Seg(minSegPoint,minCrossPoint),
                         Seg(maxCrossPoint,maxSegPoint)])
         else:
-            # obscured on right
-            print "obscured on right"
+            # obscured on bottom
+            print "obscured on bottom"
             return set([Seg(minSegPoint,minCrossPoint)])
     else:
         return set([seg])
@@ -392,39 +392,47 @@ def normBackIntersect(cross,backCross,wall,seg):
     else:
         assert(False), "seg should be vert or horiz"
 
-def normBackVertIntersect(cross, backCross, wall, seg):
+def normBackVertIntersect(normCross, backCross, wall, seg):
+    cross = intersectWalls(wall, seg)
     segSet = set([seg.p1, seg.p2])
     (minSegPoint, maxSegPoint) = extremeY(segSet)
-    if (backCross.point.y < cross.point.y):
+    if (backCross.point.y < cross.y):
         # want bottom half of line
-        if (cross.point != minSegPoint):
-            return set([Seg(cross.point, minSegPoint)])
-        else:
+        botPoint = extremeY(set([minSegPoint, normCross.point]))[0] # min
+        topPoint = extremeY(set([maxSegPoint, normCross.point]))[0] # min
+        if (topPoint.y < botPoint.y):
             return set()
+        else:
+            return set([Seg(botPoint, topPoint)])
     else:
-        if (cross.point != maxSegPoint):
-            return set([Seg(cross.point, maxSegPoint)])
-        else:
+        # want top half of line
+        botPoint = extremeY(set([minSegPoint, normCross.point]))[1] # max
+        topPoint = extremeY(set([maxSegPoint, normCross.point]))[1] # max
+        if (topPoint.y < botPoint.y):
             return set()
+        else:
+            return set([Seg(botPoint, topPoint)])
 
-def normBackHorizIntersect(cross, backCross, wall, seg):
-    print "NORMCROSS:",cross
-    print "BACKCROSS:",backCross
+def normBackHorizIntersect(normCross, backCross, wall, seg):
+    cross = intersectWalls(wall, seg)
     segSet = set([seg.p1, seg.p2])
     (minSegPoint, maxSegPoint) = extremeX(segSet)
-    print "MINSEG:", minSegPoint
-    print "MAXSEG:", maxSegPoint
-    if (backCross.point.x < cross.point.x):
+    if (backCross.point.x < cross.x):
         # want left half of line
-        if (cross.point != minSegPoint):
-            return set([Seg(cross.point, minSegPoint)])
-        else:
+        leftPoint = extremeX(set([minSegPoint, normCross.point]))[0] # min
+        rightPoint = extremeX(set([maxSegPoint, normCross.point]))[0] # min
+        if (rightPoint.x <= leftPoint.x):
             return set()
+        else:
+            return set([Seg(leftPoint, rightPoint)])
     else:
-        if (cross.point != maxSegPoint):
-            return set([Seg(cross.point, maxSegPoint)])
-        else:
+        # want right half of line
+        leftPoint = extremeX(set([minSegPoint, normCross.point]))[1] # max
+        rightPoint = extremeX(set([maxSegPoint, normCross.point]))[1] # max
+        if (rightPoint.x <= leftPoint.x):
             return set()
+        else:
+            return set([Seg(leftPoint, rightPoint)])
     
 
 def normInfIntersect(cross,infCross,wall,seg):
@@ -558,14 +566,20 @@ def behindInfVertIntersect(behindCross,infCross,wall,seg):
     cross = intersectWalls(wall,seg)
     if (infCross.point.y > 0):
         # wall above eye
-        upperPointSet = set([maxSegPoint,cross])
-        (minUpperPoint, maxUpperPoint) = extremeY(upperPointSet)
-        return set([Seg(minSegPoint, minUpperPoint)])
+        topPoint = extremeY(set([maxSegPoint, cross]))[0] # min
+        botPoint = extremeY(set([minSegPoint, cross]))[0] # min
+        if (topPoint.y < botPoint.y):
+            return set()
+        else:
+            return set([Seg(botPoint, topPoint)])
     elif (infCross.point.y < 0):
-        lowerPointSet = set([minSegPoint,cross])
-        (minLowerPoint, maxLowerPoint) = extremeY(lowerPointSet)
-        print minLowerPoint, maxLowerPoint
-        return set([Seg(maxLowerPoint, maxSegPoint)])
+        # wall below eye
+        topPoint = extremeY(set([maxSegPoint, cross]))[1] # max
+        botPoint = extremeY(set([minSegPoint, cross]))[1] # max
+        if (topPoint.y < botPoint.y):
+            return set()
+        else:
+            return set([Seg(botPoint, topPoint)])
     else:
         assert(False), "infCross should be vertical"
         
@@ -575,14 +589,21 @@ def behindInfHorizIntersect(behindCross,infCross,wall,seg):
     (minSegPoint, maxSegPoint) = extremeX(segPointSet)
     cross = intersectWalls(wall,seg)
     if (infCross.point.x > 0):
-        # wall above eye
-        upperPointSet = set([maxSegPoint,cross])
-        (minUpperPoint, maxUpperPoint) = extremeX(upperPointSet)
-        return set([Seg(minSegPoint, minUpperPoint)])
+        # wall to right of eye
+        leftPoint = extremeX(set([minSegPoint, cross]))[0] # min
+        rightPoint = extremeX(set([maxSegPoint, cross]))[0] # min
+        if (rightPoint.x < leftPoint.x):
+            return set()
+        else:
+            return set([Seg(leftPoint, rightPoint)])
     elif (infCross.point.x < 0):
-        lowerPointSet = set([minSegPoint,cross])
-        (minLowerPoint, maxLowerPoint) = extremeX(lowerPointSet)
-        return set([Seg(maxLowerPoint, maxSegPoint)])
+        # wall to left of eye
+        leftPoint = extremeX(set([minSegPoint, cross]))[1] # max
+        rightPoint = extremeX(set([maxSegPoint, cross]))[1] # max
+        if (rightPoint.x < leftPoint.x):
+            return set()
+        else:
+            return set([Seg(leftPoint, rightPoint)])
     else:
         assert(False), "infCross should be horizontal"
 
@@ -672,6 +693,9 @@ def init():
                        #Seg(Point(4,1),Point(4,5)),
                        Seg(Point(2,3),Point(2,5)),
                        Seg(Point(2,6),Point(8,6)),
+                       Seg(Point(4,7),Point(3,7)),
+                       Seg(Point(3,4),Point(3,7)),
+                       Seg(Point(8,1),Point(8,5)),
                        Seg(Point(1,4),Point(5,4))])
     
 def timerFired():
