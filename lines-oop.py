@@ -318,60 +318,60 @@ def normNormHorizIntersect(cross1,cross2,seg):
     if (minCrossPoint.x <= minSegPoint.x):
         if (maxCrossPoint.x < minSegPoint.x):
             # nothing obscured
-            print "nothing obscured"
+            #print "nothing obscured"
             return set([seg])
         elif (maxCrossPoint.x < maxSegPoint.x):
             # obscured on left
-            print "obscured on left"
+            #print "obscured on left"
             return set([Seg(maxCrossPoint, maxSegPoint)])
         else:
             # entirely obscured
-            print "entirely obscured"
+            #print "entirely obscured"
             return set()
     elif (minCrossPoint.x < maxSegPoint.x):
         if (maxCrossPoint.x < maxSegPoint.x):
             # centrally obscured
-            print "centrally obscured"
+            #print "centrally obscured"
             return set([Seg(minSegPoint,minCrossPoint),
                         Seg(maxCrossPoint,maxSegPoint)])
         else:
             # obscured on right
-            print "obscured on right"
+            #print "obscured on right"
             return set([Seg(minSegPoint,minCrossPoint)])
     else:
         return set([seg])
 
 def normNormVertIntersect(cross1,cross2,seg):
-    print "VERT"
+    #print "VERT"
     crossPoint1 = cross1.point
     crossPoint2 = cross2.point
     segSet = set([seg.p1, seg.p2])
     crossSet = set([crossPoint1, crossPoint2])
     (minSegPoint, maxSegPoint) = extremeY(segSet)
     (minCrossPoint, maxCrossPoint) = extremeY(crossSet)
-    print "minCrossPt, minSegPt",minCrossPoint, minSegPoint
+    #print "minCrossPt, minSegPt",minCrossPoint, minSegPoint
     if (minCrossPoint.y <= minSegPoint.y):
         if (maxCrossPoint.y < minSegPoint.y):
             # nothing obscured
-            print "nothing obscured"
+            #print "nothing obscured"
             return set([seg])
         elif (maxCrossPoint.y < maxSegPoint.y):
             # obscured on top
-            print "obscured on top"
+            #print "obscured on top"
             return set([Seg(maxCrossPoint, maxSegPoint)])
         else:
             # entirely obscured
-            print "entirely obscured"
+            #print "entirely obscured"
             return set()
     elif (minCrossPoint.y < maxSegPoint.y):
         if (maxCrossPoint.y < maxSegPoint.y):
             # centrally obscured
-            print "centrally obscured"
+            #print "centrally obscured"
             return set([Seg(minSegPoint,minCrossPoint),
                         Seg(maxCrossPoint,maxSegPoint)])
         else:
             # obscured on bottom
-            print "obscured on bottom"
+            #print "obscured on bottom"
             return set([Seg(minSegPoint,minCrossPoint)])
     else:
         return set([seg])
@@ -379,7 +379,7 @@ def normNormVertIntersect(cross1,cross2,seg):
 def normBehindIntersect(cross,behindCross,wall,seg):
     newCross = intersectWalls(wall,seg)
     newIntersection = Intersection(newCross, "normal")
-    print newIntersection, cross
+    #print newIntersection, cross
     return normNormIntersect(cross, newIntersection, wall, seg)
 
 def normBackIntersect(cross,backCross,wall,seg):
@@ -493,24 +493,24 @@ def behindBackIntersect(behindCross,backCross,wall,seg):
         assert(False), "seg should be vert or horiz"
 
 def behindBackVertIntersect(behindCross, backCross, wall, seg):
-    print "vert"
+    #print "vert"
     newCross = intersectWalls(wall, seg)
     crossSet = set([newCross, behindCross.point, backCross.point])
     (minCrossPoint, maxCrossPoint) = extremeY(crossSet)
     if (wall.p1.y > behindCross.point.y):
-        print "wall crosses above"
+        #print "wall crosses above"
         # wall crosses above
         # (could choose backCross, also)
         # quick check
         (botSegPoint,topSegPoint) = extremeY(set([seg.p1,seg.p2]))
         topPoint = extremeY(set([topSegPoint, newCross]))[0] # min
-        print "new seg at", topPoint, botSegPoint
+        #print "new seg at", topPoint, botSegPoint
         if (botSegPoint.y >= topPoint.y):
             return set()
         else:
             return set([Seg(botSegPoint, topPoint)])
     else:
-        print "wall crosses below"
+        #print "wall crosses below"
         (botSegPoint,topSegPoint) = extremeY(set([seg.p1,seg.p2]))
         botPoint = extremeY(set([botSegPoint, newCross]))[1] # max
         if (topSegPoint.y <= botPoint.y):
@@ -632,11 +632,15 @@ def obstructSeg(eye, wall, seg):
     cross2 = intersectRayAndRookSeg(ray2, seg)
     if ((type(cross1) == Seg) or (type(cross2) == Seg)):
         # something obscured entire segment
+        # NOTE: There is a small side effect, since
+        # the entire seg is returned even if the obstruction lies behind
+        # however, the seg must be viewed straight on, so in the 3D case,
+        # it is equivalent
         return set()
-    print "\t\tCurrently Obstructing", seg
-    print "\t\twith wall", wall
-    print "\t\tAt intersections", cross1.point, cross1.kind
-    print "\t\t             and", cross2.point, cross2.kind
+    #print "\t\tCurrently Obstructing", seg
+    #print "\t\twith wall", wall
+    #print "\t\tAt intersections", cross1.point, cross1.kind
+    #print "\t\t             and", cross2.point, cross2.kind
     return obstructViaIntersections(cross1, cross2, wall, seg)
 
 def obstructSegViaSegSet(eye, segSet, seg):
@@ -648,19 +652,19 @@ def obstructSegViaSegSet(eye, segSet, seg):
     if (type(segSet) != set): assert(False), "segSet not of type set"
     if (type(eye) != Point): assert(False), "eye not a Point"
     remainingPieces = set([seg])
-    print "Now obstructing the seg", seg
+    #print "Now obstructing the seg", seg
     newPieces = set()
     for wall in segSet:
         for piece in remainingPieces:
-            print "\tObstructing the piece", piece
-            print "\tagainst", wall
+            #print "\tObstructing the piece", piece
+            #print "\tagainst", wall
             p = obstructSeg(eye, wall, piece)
-            print "\tRemainder:",p
-            print "\tthat was the remainder"
+            #print "\tRemainder:",p
+            #print "\tthat was the remainder"
             newPieces = newPieces | p # obstructSeg(eye, wall, piece) # union
         remainingPieces = newPieces
         newPieces = set()
-    print "The remaining pieces of were", remainingPieces
+    #print "The remaining pieces of were", remainingPieces
     return remainingPieces
 
 
@@ -690,6 +694,7 @@ def run():
     root.mainloop()
 
 def init():
+    canvas.data.counter = 1
     canvas.eye = Point(1,5)
     canvas.segs = set([Seg(Point(4,1),Point(4,5)),
                        Seg(Point(3,1),Point(3,3)),
@@ -700,11 +705,15 @@ def init():
                        Seg(Point(3,4),Point(3,7)),
                        Seg(Point(8,1),Point(8,5)),
                        Seg(Point(4,5),Point(6,5)),
+                       Seg(Point(7,3),Point(7,5)),
+                       Seg(Point(6,2),Point(6,5)),
                        Seg(Point(1,4),Point(5,4))])
     
 def timerFired():
     redrawAll()
-    delay = 10000000000 # ms
+    delay = 1 # ms
+    canvas.data.counter += 1
+    print canvas.data.counter
     canvas.after(delay, timerFired)
 
 def redrawAll():
@@ -716,7 +725,7 @@ def redrawAll():
         canvas.create_line(50*seg.p1.x, 50*seg.p1.y, 50*seg.p2.x, 50*seg.p2.y)
     colors = ["red"]
     visible = obstructSegs(eye, segs)
-    print "visible = ",visible
+    #print "visible = ",visible
     for s in visible:
         canvas.create_line(50*s.p1.x, 50*s.p1.y, 50*s.p2.x, 50*s.p2.y,
                            fill=colors[0], width=3)
@@ -731,11 +740,11 @@ def keyPressed(event):
     elif (event.keysym == "Right"):
         canvas.eye = Point(canvas.eye.x + 0.1, canvas.eye.y)
     redrawAll()
-    print """
-    ########################################################
-    ###EYE = """,canvas.eye,"""
-    ########################################################
-    """
+    #print """
+    #########################################################
+    ####EYE = """,canvas.eye,"""
+    #########################################################
+    #"""
 
 
 
