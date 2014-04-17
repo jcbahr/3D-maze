@@ -9,6 +9,11 @@ import copy
 ##### Point & Seg Helper Functions #############################################
 ################################################################################
 
+def withinEp(x, y):
+    """Returns True if x and y are within some predefined epsilon: 0.001"""
+    epsilon = 0.0001
+    return abs(x-y) < epsilon
+
 def isNumber(x):
     """Returns True if x in an int, long, or float; False otherwise"""
     return type(x) in (int, long, float)
@@ -49,7 +54,10 @@ class Point(object):
         self.y = y
 
     def __eq__(self, other):
-        return ((self.x == other.x) and (self.y == other.y))
+        return (withinEp(self.x, other.x) and withinEp(self.y, other.y))
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def __str__(self):
         return "(%f,%f)" % (self.x, self.y)
@@ -66,8 +74,8 @@ class Seg(object):
         # sanity check
         if not (type(p1) == type(p2) == Point):
             assert(False), "cannot make a seg from nonpoints"
-        if (p1 == p2):
-            assert(False), "cannot make a seg from identical points"
+#        if (p1 == p2):
+#            assert(False), "cannot make a seg from identical points"
         self.p1 = p1
         self.p2 = p2
         self.isVert = (self.kind() == "vert")
@@ -95,7 +103,7 @@ class Seg(object):
     def kind(self):
         if (self.p1.x == self.p2.x):
             return "vert"
-        elif (self.p1.y == self.p2py):
+        elif (self.p1.y == self.p2.y):
             return "horiz"
         else:
             return "other"
@@ -133,9 +141,9 @@ class Intersection(object):
 
     def __str__(self):
         if (self.kind == "infinity"):
-            if (self.dx == 0):
+            if (self.point.x == 0):
                 return "(0,"+str(sign(self.point.y))+"inf)"
-            elif (self.dy == 0):
+            elif (self.point.y == 0):
                 return "("+str(sign(self.point.x))+"inf,0)"
         else:
             return "(%f,%f)" % (self.point.x, self.point.y)
@@ -151,6 +159,16 @@ class Intersection(object):
 ################################################################################
 
 
+
+def intersectRayAndRookSeg(ray, segment):
+    """Given a ray and a rook segment, returns their intersection.  The point
+    of intersection is not guaranteed to lie on the segment."""
+    if (segment.isHoriz):
+        return intersectRayAndHorizSegment(ray, segment)
+    elif (segment.isVert):
+        return intersectRayAndVertSegment(ray, segment)
+    else:
+        assert(False), "not a rook segment"
 
 def intersectRayAndVertSegment(ray, segment):
     """Given a ray and a "vert" segment, return an intersection, unless
@@ -181,6 +199,7 @@ def intersectRayAndVertSegment(ray, segment):
             return Intersection(Point(0,yIntercept), "infinity")
 
 
+
 def intersectRayAndHorizSegment(ray, segment):
     """Given a ray and a "horiz" segment, return an intersection, unless
     the ray and segment are collinear, at which point this will return
@@ -208,16 +227,6 @@ def intersectRayAndHorizSegment(ray, segment):
             xIntercept = 1 if (ray.dx > 0) else -1
             return Intersection(Point(xIntercept,0), "infinity")
 
-def intersectRayAndRookSeg(ray, segment):
-    """Given a ray and a rook segment, returns their intersection.  The point
-    of intersection is not guaranteed to lie on the segment."""
-    if (segment.isHoriz):
-        return intersectRayAndHorizSegment(ray, segment)
-    elif (segment.isVert):
-        return intersectRayAndVertSegment(ray, segment)
-    else:
-        assert(False), "not a rook segment"
-
 def intersectWalls(seg1, seg2):
     """Given two orthogonal rook segs, returns the predicted
     intersection (if they were to stretch into lines)"""
@@ -226,9 +235,9 @@ def intersectWalls(seg1, seg2):
     if ((seg1.kind() == "other") or (seg2.kind() == "other")):
         assert(False), "not rook segments"
     elif (seg1.isHoriz):
-        return Point(seg1.p1.x, seg2.p1.y)
-    elif (seg1.isVert):
         return Point(seg2.p1.x, seg1.p1.y)
+    elif (seg1.isVert):
+        return Point(seg1.p1.x, seg2.p1.y)
     else:
         # should never happen
         assert(False), "ERROR!"
@@ -251,41 +260,41 @@ def obstructViaIntersections(cross1, cross2, wall, seg):
     # I recognize this is AWFUL style, but I can't think of another
     #  way to handle these cases
     # Most of these cases are really distinct
-    if (type(cross1) == "normal"):
-        if (type(cross2) == "normal"):
+    if (cross1.kind == "normal"):
+        if (cross2.kind == "normal"):
             return normNormIntersect(cross1,cross2,wall,seg)
-        elif (type(cross2) == "behind"):
+        elif (cross2.kind == "behind"):
             return normBehindIntersect(cross1,cross2,wall,seg)
-        elif (type(cross2) == "backwards"):
+        elif (cross2.kind == "backwards"):
             return normBackIntersect(cross1,cross2,wall,seg)
-        elif (type(cross2) == "infinity"):
+        elif (cross2.kind == "infinity"):
             return normInfIntersect(cross1,cross2,wall,seg)
-    elif (type(cross1) == "behind"):
-        if (type(cross2) == "normal"):
+    elif (cross1.kind == "behind"):
+        if (cross2.kind == "normal"):
             return normBehindIntersect(cross2,cross1,wall,seg)
-        elif (type(cross2) == "behind"):
+        elif (cross2.kind == "behind"):
             return behindBehindIntersect(cross1,cross2,wall,seg)
-        elif (type(cross2) == "backwards"):
+        elif (cross2.kind == "backwards"):
             return behindBackIntersect(cross1,cross2,wall,seg)
-        elif (type(cross2) == "infinity"):
+        elif (cross2.kind == "infinity"):
             return behindInfIntersect(cross1,cross2,wall,seg)
-    elif (type(cross1) == "backwards"):
-        if (type(cross2) == "normal"):
+    elif (cross1.kind == "backwards"):
+        if (cross2.kind == "normal"):
             return normBackIntersect(cross2,cross1,wall,seg)
-        elif (type(cross2) == "behind"):
+        elif (cross2.kind == "behind"):
             return behindBackIntersect(cross2,cross1,wall,seg)
-        elif (type(cross2) == "backwards"):
+        elif (cross2.kind == "backwards"):
             return backBackIntersect(cross1,cross2,wall,seg)
-        elif (type(cross2) == "infinity"):
+        elif (cross2.kind == "infinity"):
             return backInfIntersect(cross1,cross2,wall,seg)
-    elif (type(cross1) == "infinity"):
-        if (type(cross2) == "normal"):
+    elif (cross1.kind == "infinity"):
+        if (cross2.kind == "normal"):
             return normInfIntersect(cross2,cross1,wall,seg)
-        elif (type(cross2) == "behind"):
+        elif (cross2.kind == "behind"):
             return behindInfIntersect(cross2,cross1,wall,seg)
-        elif (type(cross2) == "backwards"):
+        elif (cross2.kind == "backwards"):
             return backInfIntersect(cross2,cross1,wall,seg)
-        elif (type(cross2) == "infinity"):
+        elif (cross2.kind == "infinity"):
             return infInfIntersect(cross1,cross2,wall,seg)
 
 def normNormIntersect(cross1,cross2,wall,seg):
@@ -295,9 +304,9 @@ def normNormIntersect(cross1,cross2,wall,seg):
     if (type(seg) != Seg):
         assert(False), "received non-seg"
     if (seg.isVert):
-        return normNormVertIntersection(cross1,cross2,seg)
+        return normNormVertIntersect(cross1,cross2,seg)
     elif (seg.isHoriz):
-        return normNormHorizIntersection(cross1,cross2,seg)
+        return normNormHorizIntersect(cross1,cross2,seg)
 
 def normNormHorizIntersect(cross1,cross2,seg):
     crossPoint1 = cross1.point
@@ -306,95 +315,125 @@ def normNormHorizIntersect(cross1,cross2,seg):
     crossSet = set([crossPoint1, crossPoint2])
     (minSegPoint, maxSegPoint) = extremeX(segSet)
     (minCrossPoint, maxCrossPoint) = extremeX(crossSet)
-    if (minCrossPoint.x < minSegPoint.x):
+    if (minCrossPoint.x <= minSegPoint.x):
         if (maxCrossPoint.x < minSegPoint.x):
             # nothing obscured
-            return set(seg)
+            print "nothing obscured"
+            return set([seg])
         elif (maxCrossPoint.x < maxSegPoint.x):
             # obscured on left
-            return set(Seg(maxCrossPoint, maxSegPoint))
+            print "obscured on left"
+            return set([Seg(maxCrossPoint, maxSegPoint)])
         else:
             # entirely obscured
+            print "entirely obscured"
             return set()
     elif (minCrossPoint.x < maxSegPoint.x):
         if (maxCrossPoint.x < maxSegPoint.x):
             # centrally obscured
+            print "centrally obscured"
             return set([Seg(minSegPoint,minCrossPoint),
                         Seg(maxCrossPoint,maxSegPoint)])
         else:
             # obscured on right
-            return set(Seg(minSegPoint,minCrossPoint))
+            print "obscured on right"
+            return set([Seg(minSegPoint,minCrossPoint)])
     else:
-        return set()
+        return set([seg])
 
-def normNormVertIntersection(cross1,cross2,seg):
+def normNormVertIntersect(cross1,cross2,seg):
+    print "VERT"
     crossPoint1 = cross1.point
     crossPoint2 = cross2.point
     segSet = set([seg.p1, seg.p2])
     crossSet = set([crossPoint1, crossPoint2])
     (minSegPoint, maxSegPoint) = extremeY(segSet)
     (minCrossPoint, maxCrossPoint) = extremeY(crossSet)
-    if (minCrossPoint.y < minSegPoint.x):
-        if (maxCrossPoint.y < minSegPoint.x):
+    print "minCrossPt, minSegPt",minCrossPoint, minSegPoint
+    if (minCrossPoint.y <= minSegPoint.y):
+        if (maxCrossPoint.y < minSegPoint.y):
             # nothing obscured
-            return set(seg)
-        elif (maxCrossPoint.y < maxSegPoint.x):
+            print "nothing obscured"
+            return set([seg])
+        elif (maxCrossPoint.y < maxSegPoint.y):
             # obscured on left
-            return set(Seg(maxCrossPoint, maxSegPoint))
+            print "obscured on left"
+            return set([Seg(maxCrossPoint, maxSegPoint)])
         else:
             # entirely obscured
+            print "entirely obscured"
             return set()
-    elif (minCrossPoint.y < maxSegPoint.x):
-        if (maxCrossPoint.y < maxSegPoint.x):
+    elif (minCrossPoint.y < maxSegPoint.y):
+        if (maxCrossPoint.y < maxSegPoint.y):
             # centrally obscured
+            print "centrally obscured"
             return set([Seg(minSegPoint,minCrossPoint),
                         Seg(maxCrossPoint,maxSegPoint)])
         else:
             # obscured on right
-            return set(Seg(minSegPoint,minCrossPoint))
+            print "obscured on right"
+            return set([Seg(minSegPoint,minCrossPoint)])
     else:
-        return set()
+        return set([seg])
 
 def normBehindIntersect(cross,behindCross,wall,seg):
     newCross = intersectWalls(wall,seg)
-    return normNormIntersect(cross, newCross, wall, seg)
+    newIntersection = Intersection(newCross, "normal")
+    print newIntersection, cross
+    return normNormIntersect(cross, newIntersection, wall, seg)
 
 def normBackIntersect(cross,backCross,wall,seg):
     # we want to find the remaining portion of the seg
     #  on the opposite side of the backCross
     if (seg.isVert):
-        return normBackVertIntersection(cross,backCross,wall,seg)
+        return normBackVertIntersect(cross,backCross,wall,seg)
     elif (seg.isHoriz):
-        return normBackHorizIntersection(cross,backCross,wall,seg)
+        return normBackHorizIntersect(cross,backCross,wall,seg)
     else:
         assert(False), "seg should be vert or horiz"
 
-def normBackVertIntersection(cross, backCross, wall, seg):
+def normBackVertIntersect(cross, backCross, wall, seg):
     segSet = set([seg.p1, seg.p2])
     (minSegPoint, maxSegPoint) = extremeY(segSet)
     if (backCross.point.y < cross.point.y):
-        # want top half of line
-        return set(Seg(cross.point, maxSegPoint))
+        # want bottom half of line
+        if (cross.point != minSegPoint):
+            return set([Seg(cross.point, minSegPoint)])
+        else:
+            return set()
     else:
-        return set(Seg(cross.point, minSegPoint))
+        if (cross.point != maxSegPoint):
+            return set([Seg(cross.point, maxSegPoint)])
+        else:
+            return set()
 
-def normBackHorizIntersection(cross, backCross, wall, seg):
+def normBackHorizIntersect(cross, backCross, wall, seg):
+    print "NORMCROSS:",cross
+    print "BACKCROSS:",backCross
     segSet = set([seg.p1, seg.p2])
     (minSegPoint, maxSegPoint) = extremeX(segSet)
+    print "MINSEG:", minSegPoint
+    print "MAXSEG:", maxSegPoint
     if (backCross.point.x < cross.point.x):
-        # want right half of line
-        return set(Seg(cross.point, maxSegPoint))
+        # want left half of line
+        if (cross.point != minSegPoint):
+            return set([Seg(cross.point, minSegPoint)])
+        else:
+            return set()
     else:
-        return set(Seg(cross.point, minSegPoint))
+        if (cross.point != maxSegPoint):
+            return set([Seg(cross.point, maxSegPoint)])
+        else:
+            return set()
     
 
 def normInfIntersect(cross,infCross,wall,seg):
     # we want to find the remaining portion of the seg
     #  on the opposite side of the infCross
     if (seg.isVert):
-        return normInfVertIntersection(cross,infCross,wall,seg)
+        return normInfVertIntersect(cross,infCross,wall,seg)
     elif (seg.isHoriz):
-        return normInfHorizIntersection(cross,infCross,wall,seg)
+        return normInfHorizIntersect(cross,infCross,wall,seg)
     else:
         assert(False), "seg should be vert or horiz"
 
@@ -403,30 +442,30 @@ def normInfVertIntersection(cross, infCross, wall, seg):
     (minSegPoint, maxSegPoint) = extremeY(segSet)
     if (infCross.point.y > 0):
         # obscured above cross
-        return set(Seg(minSegPoint, cross.point))
+        return set([Seg(minSegPoint, cross.point)])
     elif (infCross.point.y < 0):
         # obscured below cross
-        return set(Seg(cross.point, maxSegPoint))
+        return set([Seg(cross.point, maxSegPoint)])
     else:
         assert(False), "infCross should be vertical"
 
 
-def normInfHorizIntersection(cross, infCross, wall, seg):
+def normInfHorizIntersect(cross, infCross, wall, seg):
     segSet = set([seg.p1, seg.p2])
     (minSegPoint, maxSegPoint) = extremeX(segSet)
     if (infCross.point.x > 0):
         # obscured to right of cross
-        return set(Seg(minSegPoint, cross.point))
+        return set([Seg(minSegPoint, cross.point)])
     elif (infCross.point.x < 0):
         # obscured to left of cross
-        return set(Seg(cross.point, maxSegPoint))
+        return set([Seg(cross.point, maxSegPoint)])
     else:
         assert(False), "infCross should be horizontal"
 
 def behindBehindIntersect(behindCross1,behindCross2,wall,seg):
     # the (obstructing) wall is behind the seg
     # so nothing is obstructed
-    return set(seg)
+    return set([seg])
 
 def behindBackIntersect(behindCross,backCross,wall,seg):
     # requires a picture to understand:
@@ -439,46 +478,60 @@ def behindBackIntersect(behindCross,backCross,wall,seg):
     # (The eye may not be in a seg)
     # We must remove the part of the seg that extends beyond the wall
     if (seg.isVert):
-        return behindBackVertIntersection(behindCross,backCross,wall,seg)
+        return behindBackVertIntersect(behindCross,backCross,wall,seg)
     elif (seg.isHoriz):
-        return behindBackHorizIntersection(behindCross,backCross,wall,seg)
+        return behindBackHorizIntersect(behindCross,backCross,wall,seg)
     else:
         assert(False), "seg should be vert or horiz"
 
-def behindBackVertIntersection(behindCross, backCross, wall, seg):
+def behindBackVertIntersect(behindCross, backCross, wall, seg):
+    print "vert"
     newCross = intersectWalls(wall, seg)
-    crossSet = set([newCross.point, behindCross.point, backCross.point])
+    crossSet = set([newCross, behindCross.point, backCross.point])
     (minCrossPoint, maxCrossPoint) = extremeY(crossSet)
     if (wall.p1.y > behindCross.point.y):
+        print "wall crosses above"
         # wall crosses above
         # (could choose backCross, also)
         # quick check
-        if (wallp1.y <= behindCross.point.y): assert(False), "Logical error"
         (botSegPoint,topSegPoint) = extremeY(set([seg.p1,seg.p2]))
         topPoint = extremeY(set([topSegPoint, newCross]))[0] # min
-        return set(Seg(botSegPoint, topPoint))
+        print "new seg at", topPoint, botSegPoint
+        if (botSegPoint.y >= topPoint.y):
+            return set()
+        else:
+            return set([Seg(botSegPoint, topPoint)])
     else:
+        print "wall crosses below"
         (botSegPoint,topSegPoint) = extremeY(set([seg.p1,seg.p2]))
-        botPoint = extremeY(set([topSegPoint, newCross]))[1] # max
-        return set(Seg(botPoint, topSegPoint))
+        botPoint = extremeY(set([botSegPoint, newCross]))[1] # max
+        if (topSegPoint.y <= botPoint.y):
+            return set()
+        else:
+            return set([Seg(botPoint, topSegPoint)])
 
 
-def behindBackHorizIntersection(behindCross, backCross, wall, seg):
+def behindBackHorizIntersect(behindCross, backCross, wall, seg):
     newCross = intersectWalls(wall, seg)
-    crossSet = set([newCross.point, behindCross.point, backCross.point])
+    crossSet = set([newCross, behindCross.point, backCross.point])
     (minCrossPoint, maxCrossPoint) = extremeX(crossSet)
     if (wall.p1.x > behindCross.point.x):
         # wall crosses to right
         # (could choose backCross, also)
         # quick check
-        if (wallp1.x <= behindCross.point.x): assert(False), "Logical error"
         (botSegPoint,topSegPoint) = extremeX(set([seg.p1,seg.p2]))
         topPoint = extremeX(set([topSegPoint, newCross]))[0] # min
-        return set(Seg(botSegPoint, topPoint))
+        if (botSegPoint.x >= topPoint.x):
+            return set()
+        else:
+            return set([Seg(botSegPoint, topPoint)])
     else:
         (botSegPoint,topSegPoint) = extremeX(set([seg.p1,seg.p2]))
-        botPoint = extremeX(set([topSegPoint, newCross]))[1] # max
-        return set(Seg(botPoint, topSegPoint))
+        botPoint = extremeX(set([botSegPoint, newCross]))[1] # max
+        if (topSegPoint.x <= botPoint.x):
+            return set()
+        else:
+            return set([Seg(botPoint, topSegPoint)])
 
 
 
@@ -492,55 +545,174 @@ def behindInfIntersect(behindCross,infCross,wall,seg):
     # any portion of the segment that extends beyond the wall is obscured
     #  just like with the behindBackIntersect
     if (seg.isVert):
-        return behindInfVertIntersection(behindCross,backCross,wall,seg)
+        return behindInfVertIntersect(behindCross,infCross,wall,seg)
     elif (seg.isHoriz):
-        return behindInfHorizIntersection(behindCross,backCross,wall,seg)
+        return behindInfHorizIntersect(behindCross,infCross,wall,seg)
     else:
         assert(False), "seg should be vert or horiz"
 
 
-def behindInfVertIntersection(behindCross,infCross,wall,seg):
+def behindInfVertIntersect(behindCross,infCross,wall,seg):
     segPointSet = set([seg.p1, seg.p2])
-    (minSegPoint, maxSegPoint) = extremeX(segPointSet)
+    (minSegPoint, maxSegPoint) = extremeY(segPointSet)
     cross = intersectWalls(wall,seg)
-    if (infCross.y > 1):
+    if (infCross.point.y > 0):
         # wall above eye
         upperPointSet = set([maxSegPoint,cross])
         (minUpperPoint, maxUpperPoint) = extremeY(upperPointSet)
-        return set(Seg(minSegPoint, minUpperPoint))
-    elif (infCross.y < 1):
+        return set([Seg(minSegPoint, minUpperPoint)])
+    elif (infCross.point.y < 0):
         lowerPointSet = set([minSegPoint,cross])
         (minLowerPoint, maxLowerPoint) = extremeY(lowerPointSet)
-        return set(Seg(maxLowerPoint, maxSegPoint))
+        print minLowerPoint, maxLowerPoint
+        return set([Seg(maxLowerPoint, maxSegPoint)])
     else:
         assert(False), "infCross should be vertical"
         
 
-def behindInfHorizIntersection(behindCross,infCross,wall,seg):
+def behindInfHorizIntersect(behindCross,infCross,wall,seg):
     segPointSet = set([seg.p1, seg.p2])
-    (minSegPoint, maxSegPoint) = extremeY(segPointSet)
+    (minSegPoint, maxSegPoint) = extremeX(segPointSet)
     cross = intersectWalls(wall,seg)
-    if (infCross.x > 1):
+    if (infCross.point.x > 0):
         # wall above eye
         upperPointSet = set([maxSegPoint,cross])
         (minUpperPoint, maxUpperPoint) = extremeX(upperPointSet)
-        return set(Seg(minSegPoint, minUpperPoint))
-    elif (infCross.x < 1):
+        return set([Seg(minSegPoint, minUpperPoint)])
+    elif (infCross.point.x < 0):
         lowerPointSet = set([minSegPoint,cross])
         (minLowerPoint, maxLowerPoint) = extremeX(lowerPointSet)
-        return set(Seg(maxLowerPoint, maxSegPoint))
+        return set([Seg(maxLowerPoint, maxSegPoint)])
     else:
         assert(False), "infCross should be horizontal"
 
 def backBackIntersect(backCross1,backCross2,wall,seg):
-    return set(seg)
+    return set([seg])
             
 def backInfIntersect(backCross,infCross,wall,seg):
-    return set(seg)
+    return set([seg])
 
 def infInfIntersect(infCross1,infCross2,wall,seg):
     # eye is collinear with wall, which is parallel to seg
-    return set(seg)
+    return set([seg])
+
+
+################################################################################
+##### Total Visibility of a Segment ############################################
+################################################################################
+
+def obstructSeg(eye, wall, seg):
+    """Given an eye, a certain seg, and an (obstructing) wall, this returns
+    the remaining visible portion of the seg as a set of segments (or an empty
+    set)."""
+    ray1 = Ray(eye, wall.p1)
+    ray2 = Ray(eye, wall.p2)
+    cross1 = intersectRayAndRookSeg(ray1, seg)
+    cross2 = intersectRayAndRookSeg(ray2, seg)
+    print "\t\tCurrently Obstructing", seg
+    print "\t\twith wall", wall
+    print "\t\tAt intersections", cross1.point, cross1.kind
+    print "\t\t             and", cross2.point, cross2.kind
+    return obstructViaIntersections(cross1, cross2, wall, seg)
+
+def obstructSegViaSegSet(eye, segSet, seg):
+    """Given an eye, a certain seg, and a set of other segs, this returns the
+    remaining visible portion of the specific seg when obstructed by the whole
+    set."""
+    # sanity check
+    if (type(seg) != Seg): assert(False), "seg not of type Seg"
+    if (type(segSet) != set): assert(False), "segSet not of type set"
+    if (type(eye) != Point): assert(False), "eye not a Point"
+    remainingPieces = set([seg])
+    print "Now obstructing the seg", seg
+    newPieces = set()
+    for wall in segSet:
+        for piece in remainingPieces:
+            print "\tObstructing the piece", piece
+            print "\tagainst", wall
+            p = obstructSeg(eye, wall, piece)
+            print "\tRemainder:",p
+            print "\tthat was the remainder"
+            newPieces = newPieces | p # obstructSeg(eye, wall, piece) # union
+        remainingPieces = newPieces
+        newPieces = set()
+    print "The remaining pieces of were", remainingPieces
+    return remainingPieces
+
+
+def obstructSegs(eye, segSet):
+    """Given an eye and a set of segments, this returns the visible portions
+    (as a set) of each segment."""
+    visible = set()
+    for seg in segSet:
+        otherSegs = copy.copy(segSet)
+        otherSegs.remove(seg)
+        visible = visible.union(obstructSegViaSegSet(eye, otherSegs, seg))
+    return visible
+
+
+
+from Tkinter import *
+def run():
+    global canvas
+    root = Tk()
+    canvas = Canvas(root, width=500, height=500)
+    canvas.pack()
+    class Struct: pass
+    canvas.data = Struct()
+    init()
+    root.bind("<Key>", keyPressed)
+    timerFired()
+    root.mainloop()
+
+def init():
+    canvas.eye = Point(1,4.9)
+    canvas.segs = set([Seg(Point(4,1),Point(4,5)),
+                       Seg(Point(3,1),Point(3,3)),
+                       #Seg(Point(4,1),Point(4,5)),
+                       Seg(Point(2,3),Point(2,5)),
+                       Seg(Point(2,6),Point(8,6)),
+                       Seg(Point(1,4),Point(5,4))])
+    
+def timerFired():
+    redrawAll()
+    delay = 10000000000 # ms
+    canvas.after(delay, timerFired)
+
+def redrawAll():
+    canvas.delete(ALL)
+    eye = canvas.eye
+    segs = canvas.segs
+    canvas.create_line(50*eye.x-1, 50*eye.y-1, 50*eye.x+1, 50*eye.y+1, fill="red", width=2)
+    for seg in segs:
+        canvas.create_line(50*seg.p1.x, 50*seg.p1.y, 50*seg.p2.x, 50*seg.p2.y)
+    colors = ["red"]
+    visible = obstructSegs(eye, segs)
+    print "visible = ",visible
+    for s in visible:
+        canvas.create_line(50*s.p1.x, 50*s.p1.y, 50*s.p2.x, 50*s.p2.y,
+                           fill=colors[0], width=3)
+
+def keyPressed(event):
+    if (event.keysym == "Up"):
+        canvas.eye = Point(canvas.eye.x, canvas.eye.y - 0.1)
+    elif (event.keysym == "Down"):
+        canvas.eye = Point(canvas.eye.x, canvas.eye.y + 0.1)
+    elif (event.keysym == "Left"):
+        canvas.eye = Point(canvas.eye.x - 0.1, canvas.eye.y)
+    elif (event.keysym == "Right"):
+        canvas.eye = Point(canvas.eye.x + 0.1, canvas.eye.y)
+    redrawAll()
+    print """
+    ########################################################
+    ###EYE = """,canvas.eye,"""
+    ########################################################
+    """
+
+
+
+run()
+
 
 
 
