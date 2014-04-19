@@ -4,10 +4,26 @@
 # line intersection (an object oriented version)
 
 import copy
+import math
+from Tkinter import *
+import random
+import time
+#random.seed(41)
 
 ################################################################################
 ##### Point & Seg Helper Functions #############################################
 ################################################################################
+
+def flipCoin():
+    # taken from:
+    # kosbie.net/cmu/fall-12/15-112/handouts/notes-recursion/mazeSolver.py
+    return random.choice([True, False])
+
+def smallChance():
+    choices = [True]
+    choices.append([False]*3)
+    return random.choice(choices)
+
 
 def withinEp(x, y):
     """Returns True if x and y are within some predefined epsilon: 0.001"""
@@ -120,6 +136,24 @@ class Ray(object):
     def __eq__(self, other):
         return ((self.eye == other.eye) and (self.dx == other.dx)
             and (self.dy == other.dy))
+
+    def dot(self, other):
+        if (type(other) != Ray):
+            assert(False), "cannot dot non-rays"
+        if (self.eye != other.eye):
+            assert(False), "rays have different starting points"
+        return self.dx * other.dx + self.dy * other.dy
+
+    def norm(self):
+        return math.sqrt(self.dot(self))
+
+    def angle(self, other):
+        if (type(other) != Ray):
+            assert(False), "angle not defined for non-rays"
+        if (self.eye != other.eye):
+            assert(False), "rays have different starting points"
+        angle = math.acos(self.dot(other) / float(self.norm() * other.norm()))
+        return angle # radians
 
 
 class Intersection(object):
@@ -445,15 +479,25 @@ def normInfIntersect(cross,infCross,wall,seg):
     else:
         assert(False), "seg should be vert or horiz"
 
-def normInfVertIntersection(cross, infCross, wall, seg):
+def normInfVertIntersect(cross, infCross, wall, seg):
     segSet = set([seg.p1, seg.p2])
     (minSegPoint, maxSegPoint) = extremeY(segSet)
     if (infCross.point.y > 0):
         # obscured above cross
-        return set([Seg(minSegPoint, cross.point)])
+        topPoint = extremeY(set([maxSegPoint, cross.point]))[0] # min
+        botPoint = extremeY(set([minSegPoint, cross.point]))[0] # min
+        if (topPoint.y < botPoint.y):
+            return set()
+        else:
+            return set([Seg(botPoint, topPoint)])
     elif (infCross.point.y < 0):
         # obscured below cross
-        return set([Seg(cross.point, maxSegPoint)])
+        topPoint = extremeY(set([maxSegPoint, cross.point]))[1] # max
+        botPoint = extremeY(set([minSegPoint, cross.point]))[1] # max
+        if (topPoint.y < botPoint.y):
+            return set()
+        else:
+            return set([Seg(botPoint, topPoint)])
     else:
         assert(False), "infCross should be vertical"
 
@@ -463,10 +507,20 @@ def normInfHorizIntersect(cross, infCross, wall, seg):
     (minSegPoint, maxSegPoint) = extremeX(segSet)
     if (infCross.point.x > 0):
         # obscured to right of cross
-        return set([Seg(minSegPoint, cross.point)])
+        rightPoint = extremeX(set([maxSegPoint, cross.point]))[0] # min
+        leftPoint = extremeX(set([minSegPoint, cross.point]))[0] # min
+        if (rightPoint.x < leftPoint.x):
+            return set()
+        else:
+            return set([Seg(leftPoint, rightPoint)])
     elif (infCross.point.x < 0):
         # obscured to left of cross
-        return set([Seg(cross.point, maxSegPoint)])
+        rightPoint = extremeX(set([maxSegPoint, cross.point]))[1] # max
+        leftPoint = extremeX(set([minSegPoint, cross.point]))[1] # max
+        if (rightPoint.x < leftPoint.x):
+            return set()
+        else:
+            return set([Seg(leftPoint, rightPoint)])
     else:
         assert(False), "infCross should be horizontal"
 
@@ -679,72 +733,354 @@ def obstructSegs(eye, segSet):
     return visible
 
 
+################################################################################
+##### Camera Class #############################################################
+################################################################################
 
-from Tkinter import *
+class Camera(object):
+    def __init__(self, startPoint, startDir):
+        pass
+    pass
+
+################################################################################
+##### Maze Class ###############################################################
+################################################################################
+
+class Maze(object):
+    def __init__(self, rows, cols):
+        (self.rows, self.cols) = (rows, cols)
+        self.initCells()
+        self.initPoints()
+        self.initSegs()
+        self.initCamera()
+        self.makeMaze()
+
+    def initCells(self):
+        (rows, cols) = (self.rows, self.cols)
+        # more points than cells
+        cRows = rows - 1
+        cCols = cols - 1
+        self.cells = [[i+cRows*j for i in xrange(cRows)] for j in xrange(cCols)]
+
+    def initCellsAsOne(self):
+        (rows, cols) = (self.rows, self.cols)
+        # more points than cells
+        cRows = rows - 1
+        cCols = cols - 1
+        self.cells = [[0]*cCols for i in xrange(cRows)]
+
+    def initPoints(self):
+        (rows, cols) = (self.rows, self.cols)
+        self.points = [[0]*cols for i in xrange(rows)]
+        for row in xrange(rows):
+            for col in xrange(cols):
+                self.points[row][col] = Point(row, col)
+
+    def initSegs(self):
+        # we start with all possible segments
+        (rows, cols) = (self.rows, self.cols)
+        self.segs = list()
+        for row in xrange(rows):
+            for col in xrange(cols):
+                if (row + 1 < rows):
+                    nextPoint = Point(row+1,col)
+                    self.segs.append(Seg(Point(row,col), nextPoint))
+                if (col + 1 < cols):
+                    nextPoint = Point(row,col+1)
+                    self.segs.append(Seg(Point(row,col), nextPoint))
+
+    def initCamera(self):
+        # we start closest to (0,0)
+        startPoint = Point(0.5, 0.5)
+        startDir = Ray(startPoint, Point(1,0))
+        self.camera = Camera(startPoint, startDir)
+
+    def removeSeg(self, seg, cellVal1, cellVal2):
+        if (seg in self.segs):
+            self.segs.remove(seg)
+        self.renameCells(cellVal1, cellVal2)
+
+    def renameCells(self, cellVal1, cellVal2):
+        (cRows, cCols) = (self.rows - 1, self.cols - 1)
+        (fromVal, toVal) = (max(cellVal1, cellVal2), min(cellVal1, cellVal2))
+        for row in xrange(cRows):
+            for col in xrange(cCols):
+                if (self.cells[row][col] == fromVal):
+                    self.cells[row][col] = toVal
+
+    def isFinishedMaze(self):
+        (cRows, cCols) = (self.rows - 1, self.cols - 1)
+        for row in xrange(cRows):
+            for col in xrange(cCols):
+                if (self.cells[row][col] != 0):
+                    return False
+        return True
+            
+
+    def makeMaze(self):
+        # I am borrowing heavily from the algorithm used here:
+        # kosbie.net/cmu/fall-12/15-112/handouts/notes-recursion/mazeSolver.py
+        (rows, cols) = (self.rows, self.cols)
+        (cRows, cCols) = (rows-1, cols-1)
+        #print "(cRows,cCols) = ", (cRows, cCols)
+        while (not self.isFinishedMaze()):
+            cRow = random.randint(0, cRows-1)
+            cCol = random.randint(0, cCols-1)
+            #print "\t",(cRow,cCol)
+            curCell = self.cells[cRow][cCol]
+            if flipCoin(): # try to go east
+                if (cCol == cCols - 1): continue # at edge
+                targetCell = self.cells[cRow][cCol + 1]
+                dividingSeg = Seg(Point(cRow,cCol+1),
+                                  Point(cRow+1,cCol+1))
+                if (curCell == targetCell):
+                    if (dividingSeg in self.segs):
+                        continue
+                    else:# True: # NOTE: NOTE: NOTE:smallChance():
+                        self.removeSeg(dividingSeg, curCell, targetCell)
+                    #else:
+                    #    continue
+                else:
+                    self.removeSeg(dividingSeg, curCell, targetCell)
+            else: # try to go north
+                if (cRow == cRows - 1): continue # at edge
+                targetCell = self.cells[cRow+1][cCol]
+                dividingSeg = Seg(Point(cRow+1,cCol),
+                                  Point(cRow+1,cCol+1))
+                if (curCell == targetCell):
+                    continue
+                else:
+                    self.removeSeg(dividingSeg, curCell, targetCell)
+            #print self.cells
+            #time.sleep(0.5)
+            #print self.isFinishedMaze()
+
+    def deadCornerCell(row, col, dir):
+        pass
+
+    def cullCorners(self, eye):
+        eyeRow = int(math.floor(eye.y))
+        eyecol = int(math.floor(eye.x))
+        (rows, cols) = (self.rows, self.cols)
+        (cRows, cCols) = (rows - 1, cols - 1)
+        # xranges are reversed so that we check progressively
+        # further from the eye (since this process "cascades")
+        culledFlag = False
+        # bottom left
+        if ((eyeRow != 0) and (eyeCol != 0)):
+            for row in xrange(eyeRow-1, -1, -1):
+                for col in xrange(eyeCol-1, -1, -1):
+                    if (self.deadCornerCell(row, col, "DL")):
+                        self.cells[row][col] = 0 # dead
+                        culledFlag = True
+        # bottom right
+        if ((eyeRow != 0) and (eyeCol != cCols)):
+            for row in xrange(eyeRow-1, -1, -1):
+                for col in xrange(eyeCol+1, cCols):
+                    if (self.deadCornerCell(row, col, "DR")):
+                        self.cells[row][col] = 0 # dead
+                        culledFlag = True
+        # top left
+        if ((eyeRow != cRows) and (eyeCol != 0)):
+            for row in xrange(eyeRow+1, cRows):
+                for col in xrange(eyeCol-1, -1 -1):
+                    if (self.deadCornerCell(row, col, "UL")):
+                        self.cells[row][col] = 0 # dead
+                        culledFlag = True
+        # top right
+        if ((eyeRow != cRows) and (eyeCol != 0)):
+            for row in xrange(eyeRow+1, cRows):
+                for col in xrange(eyeCol+1, cCols):
+                    if (self.deadCornerCell(row, col, "UR")):
+                        self.cells[row][col] = 0 # dead
+                        culledFlag = True
+        return culledFlag # something was deleted
+                
+
+        
+    def removeDeadSandwichedSegs(self):
+        pass
+
+    def hasSeg(self, row, col, dir):
+        if (dir == "left"):
+            return (Seg(Point(row, col), Point(row+1,col)) in self.segs)
+        elif (dir == "right"):
+            return (Seg(Point(row, col+1), Point(row+1,col+1)) in self.segs)
+        elif (dir == "up"):
+            return (Seg(Point(row+1, col), Point(row+1,col+1)) in self.segs)
+        elif (dir == "down"):
+            return (Seg(Point(row, col), Point(row,col+1)) in self.segs)
+        else:
+            assert(False), "not a direction"
+
+    def cullSegs(self, eye):
+        # only return segs which could possibly be visible to reduce 
+        # render time
+        # mark all cells as 1 (alive)
+        # we will mark cells as 0 (dead) if they cannot possible be seen
+        # walls sandwiched between dead cells are invisible and will be culled
+        eyeRow = int(math.floor(eye.y))
+        eyeCol = int(math.floor(eye.x))
+        (rows, cols) = (self.rows, self.cols)
+        (cRows, cCols) = (rows - 1, cols - 1)
+        self.initCellsAsOne()
+        for col in xrange(eyeCol, cCols):
+            if self.hasSeg(eyeRow, col, "right"):
+                self.deleteCellInDir(eyeRow, col, "right")
+        for col in xrange(eyeCol, -1, -1):
+            if self.hasSeg(eyeRow, col, "left"):
+                self.deleteCellInDir(eyeRow, col, "left")
+        for row in xrange(eyeRow, cRows):
+            if self.hasSeg(row, eyeCol, "up"):
+                self.deleteCellInDir(row, eyeCol, "up")
+        for row in xrange(eyeRow, -1, -1):
+            if self.hasSeg(row, eyeCol, "down"):
+                self.deleteCellInDir(row, eyeCol, "down")
+        while(self.cullCorners(eye)):
+            # cullCorners will remove cells invisible by a corner
+            # it will return true if something was removed
+            pass
+        self.removeDeadSandwichedSegs()
+        # will remove segs sandwiched between dead cells
+        return set(self.segs)
+
+
+        
+
+
+
+
+
+
+
+################################################################################
+##### Animation Class ##########################################################
+################################################################################
+
+
+class Animation(object):
+    def __init__(self, width=500, height=300):
+        self.root = Tk()
+        self.width = width
+        self.height = height
+        self.canvas = Canvas(self.root, width=self.width, height=self.height)
+        self.canvas.pack()
+        self.init()
+        self.root.bind("<KeyPress>", self.keyPressed)
+        self.root.bind("<KeyRelease>", self.keyReleased)
+        self.root.bind("<Button-1>", self.mousePressed)
+
+    def run(self):
+        self.timerFired()
+        self.root.mainloop()
+
+    def init(self):
+        pass
+
+    def redrawAll(self):
+        pass
+
+    def keyPressed(self, event):
+        pass
+
+    def keyReleased(self, event):
+        pass
+
+    def mousePressed(self, event):
+        pass
+
+    def timerFired(self):
+        self.redrawAll()
+        delay = 100 # ms
+        self.canvas.after(delay, self.timerFired)
+
+
+################################################################################
+##### MazeGame Animation Class #################################################
+################################################################################
+
+
+# TODO: Move animation functions into MazeGame class
+class MazeGame(Animation):
+    def __init__(self):
+        pass
+
+    def init(self):
+        pass
+
 def run():
     global canvas
     root = Tk()
-    canvas = Canvas(root, width=500, height=500)
+    canvas = Canvas(root, width=700, height=700)
     canvas.pack()
     class Struct: pass
     canvas.data = Struct()
     init()
-    root.bind("<Key>", keyPressed)
+    root.bind("<KeyPress>", keyPressed)
+    root.bind("<KeyRelease>", keyReleased)
     timerFired()
     root.mainloop()
 
 def init():
     canvas.data.counter = 1
-    canvas.eye = Point(1,5)
-    canvas.segs = set([Seg(Point(4,1),Point(4,5)),
-                       Seg(Point(3,1),Point(3,3)),
-                       #Seg(Point(4,1),Point(4,5)),
-                       Seg(Point(2,3),Point(2,5)),
-                       Seg(Point(2,6),Point(8,6)),
-                       Seg(Point(4,7),Point(3,7)),
-                       Seg(Point(3,4),Point(3,7)),
-                       Seg(Point(8,1),Point(8,5)),
-                       Seg(Point(4,5),Point(6,5)),
-                       Seg(Point(7,3),Point(7,5)),
-                       Seg(Point(6,2),Point(6,5)),
-                       Seg(Point(1,4),Point(5,4))])
+    canvas.eye = Point(2,0.5)
+    canvas.maze = Maze(7,7)
+    canvas.segs = set(canvas.maze.segs)
+    canvas.v = (0,0)
+#    canvas.segs = set([Seg(Point(4,1),Point(4,5)),
+#                       Seg(Point(3,1),Point(3,3)),
+#                       #Seg(Point(4,1),Point(4,5)),
+#                       Seg(Point(2,3),Point(2,5)),
+#                       Seg(Point(2,6),Point(8,6)),
+#                       Seg(Point(4,7),Point(3,7)),
+#                       Seg(Point(3,4),Point(3,7)),
+#                       Seg(Point(8,1),Point(8,5)),
+#                       Seg(Point(4,5),Point(6,5)),
+#                       Seg(Point(7,3),Point(7,5)),
+#                       Seg(Point(6,2),Point(6,5)),
+#                       Seg(Point(1,4),Point(5,4))])
     
 def timerFired():
+    canvas.eye = Point(canvas.eye.x + canvas.v[0], canvas.eye.y + canvas.v[1])
     redrawAll()
-    delay = 1 # ms
+    delay = 40 # ms
     canvas.data.counter += 1
-    print canvas.data.counter
+    #print canvas.data.counter
     canvas.after(delay, timerFired)
 
+# TODO: have 3D and top-down drawing modes
 def redrawAll():
     canvas.delete(ALL)
     eye = canvas.eye
     segs = canvas.segs
-    canvas.create_line(50*eye.x-1, 50*eye.y-1, 50*eye.x+1, 50*eye.y+1, fill="red", width=2)
+    canvas.create_line(5+50*eye.x-1, 5+50*eye.y-1, 5+50*eye.x+1, 5+50*eye.y+1, fill="red", width=2)
     for seg in segs:
-        canvas.create_line(50*seg.p1.x, 50*seg.p1.y, 50*seg.p2.x, 50*seg.p2.y)
+        canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
     colors = ["red"]
-    visible = obstructSegs(eye, segs)
+    possibleSegs = canvas.maze.cullSegs(eye)
+    visible = obstructSegs(eye, possibleSegs)
     #print "visible = ",visible
     for s in visible:
-        canvas.create_line(50*s.p1.x, 50*s.p1.y, 50*s.p2.x, 50*s.p2.y,
+        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
                            fill=colors[0], width=3)
 
 def keyPressed(event):
     if (event.keysym == "Up"):
-        canvas.eye = Point(canvas.eye.x, canvas.eye.y - 0.1)
+        canvas.v = (0,-0.1)
     elif (event.keysym == "Down"):
-        canvas.eye = Point(canvas.eye.x, canvas.eye.y + 0.1)
+        canvas.v = (0,0.1)
     elif (event.keysym == "Left"):
-        canvas.eye = Point(canvas.eye.x - 0.1, canvas.eye.y)
+        canvas.v = (-0.1,0)
     elif (event.keysym == "Right"):
-        canvas.eye = Point(canvas.eye.x + 0.1, canvas.eye.y)
+        canvas.v = (0.1,0)
     redrawAll()
     #print """
     #########################################################
     ####EYE = """,canvas.eye,"""
-    #########################################################
-    #"""
+    #########################################################"""
+
+def keyReleased(event):
+    canvas.v = (0,0)
 
 
 
