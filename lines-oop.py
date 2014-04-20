@@ -1,4 +1,4 @@
-#!/bin/env python2.7
+#!/bin/env pypy
 
 # lines-oop.py
 # line intersection (an object oriented version)
@@ -8,7 +8,7 @@ import math
 from Tkinter import *
 import random
 import time
-#random.seed(41)
+random.seed(41)
 
 ################################################################################
 ##### Point & Seg Helper Functions #############################################
@@ -767,7 +767,7 @@ class Maze(object):
         # more points than cells
         cRows = rows - 1
         cCols = cols - 1
-        self.cells = [[0]*cCols for i in xrange(cRows)]
+        self.cells = [[1]*cCols for i in xrange(cRows)]
 
     def initPoints(self):
         (rows, cols) = (self.rows, self.cols)
@@ -855,12 +855,42 @@ class Maze(object):
             #time.sleep(0.5)
             #print self.isFinishedMaze()
 
-    def deadCornerCell(row, col, dir):
-        pass
+    def deadCornerCell(self, row, col, dir):
+        #print (row,col)
+        (rows, cols) = (self.rows, self.cols)
+        (cRows, cCols) = (rows - 1, cols - 1)
+        if (dir == "UL"):
+            # checking to the upper left
+            # if shielded by dead cells to the bottom right, this is dead
+            rightCell = self.cells[row][col+1]
+            downCell = self.cells[row-1][col]
+            return (((self.hasSeg(row, col, "right")) or (rightCell == 0)) and
+                    ((self.hasSeg(row, col, "down")) or (downCell == 0)))
+        elif (dir == "UR"):
+            leftCell = self.cells[row][col-1]
+            downCell = self.cells[row-1][col]
+            return (((self.hasSeg(row, col, "left")) or (leftCell == 0)) and
+                    ((self.hasSeg(row, col, "down")) or (downCell == 0)))
+        elif (dir == "DL"):
+            rightCell = self.cells[row][col+1]
+            upCell = self.cells[row+1][col]
+            return (((self.hasSeg(row, col, "right")) or (rightCell == 0)) and
+                    ((self.hasSeg(row, col, "up")) or (upCell == 0)))
+        elif (dir == "DR"):
+            leftCell = self.cells[row][col-1]
+            upCell = self.cells[row+1][col]
+            return (((self.hasSeg(row, col, "left")) or (leftCell == 0)) and
+                    ((self.hasSeg(row, col, "up")) or (upCell == 0)))
+        else:
+            assert(False), "not a direction"
+
+
+
+        return False
 
     def cullCorners(self, eye):
         eyeRow = int(math.floor(eye.y))
-        eyecol = int(math.floor(eye.x))
+        eyeCol = int(math.floor(eye.x))
         (rows, cols) = (self.rows, self.cols)
         (cRows, cCols) = (rows - 1, cols - 1)
         # xranges are reversed so that we check progressively
@@ -871,47 +901,138 @@ class Maze(object):
             for row in xrange(eyeRow-1, -1, -1):
                 for col in xrange(eyeCol-1, -1, -1):
                     if (self.deadCornerCell(row, col, "DL")):
-                        self.cells[row][col] = 0 # dead
-                        culledFlag = True
+                        #print "DL-DEAD ->", (row,col)
+                        #print "DL"
+                        if (self.cells[row][col] != 0):
+                            self.cells[row][col] = 0 # dead
+                            culledFlag = True
         # bottom right
         if ((eyeRow != 0) and (eyeCol != cCols)):
             for row in xrange(eyeRow-1, -1, -1):
                 for col in xrange(eyeCol+1, cCols):
                     if (self.deadCornerCell(row, col, "DR")):
-                        self.cells[row][col] = 0 # dead
-                        culledFlag = True
+                        #print "DR-DEAD ->", (row,col)
+                        #print "DR"
+                        if (self.cells[row][col] != 0):
+                            self.cells[row][col] = 0 # dead
+                            culledFlag = True
         # top left
         if ((eyeRow != cRows) and (eyeCol != 0)):
+            #print "HEY, IN UL NOW"
+            #print "eyeRow, cRows", eyeRow, cRows
+            #print "eyeCol", eyeCol
             for row in xrange(eyeRow+1, cRows):
-                for col in xrange(eyeCol-1, -1 -1):
+                #print "row", row
+                for col in xrange(eyeCol-1, -1, -1):
+                    #print "col"
+                    #print "UL row,col",(row,col)
                     if (self.deadCornerCell(row, col, "UL")):
-                        self.cells[row][col] = 0 # dead
-                        culledFlag = True
+                        #print "UL-DEAD ->", (row,col)
+                        #print "UL"
+                        if (self.cells[row][col] != 0):
+                            self.cells[row][col] = 0 # dead
+                            culledFlag = True
         # top right
-        if ((eyeRow != cRows) and (eyeCol != 0)):
+        if ((eyeRow != cRows) and (eyeCol != cCols)):
             for row in xrange(eyeRow+1, cRows):
                 for col in xrange(eyeCol+1, cCols):
                     if (self.deadCornerCell(row, col, "UR")):
-                        self.cells[row][col] = 0 # dead
-                        culledFlag = True
+                        #print "UR-DEAD ->", (row,col)
+                        #print "UR"
+                        if (self.cells[row][col] != 0):
+                            self.cells[row][col] = 0 # dead
+                            culledFlag = True
         return culledFlag # something was deleted
                 
 
         
     def removeDeadSandwichedSegs(self):
-        pass
+        (rows, cols) = (self.rows, self.cols)
+        (cRows, cCols) = (rows - 1, cols - 1)
+        # check right
+        for row in xrange(cRows):
+            for col in xrange(cCols - 1):
+                if (self.cells[row][col] == self.cells[row][col+1] == 0):
+                    deadSeg = Seg(Point(col+1, row), Point(col+1, row+1))
+                    if (deadSeg in self.checkSegs):
+                        #print "REMOVED",deadSeg
+                        self.checkSegs.remove(deadSeg)
+        # check far right
+        for row in xrange(cRows):
+            if (self.cells[row][cCols-1] == 0):
+                deadSeg = Seg(Point(cCols+1, row), Point(cCols+1, row+1))
+                if (deadSeg in self.checkSegs):
+                    #print "FAR RIGHT"
+                    self.checkSegs.remove(deadSeg)
+        # check up
+        for row in xrange(cRows - 1):
+            for col in xrange(cCols):
+                if (self.cells[row][col] == self.cells[row+1][col] == 0):
+                    deadSeg = Seg(Point(col, row+1), Point(col+1, row+1))
+                    if (deadSeg in self.checkSegs):
+                        #print "REMOVED",deadSeg
+                        self.checkSegs.remove(deadSeg)
+        # check far top
+        for col in xrange(cCols):
+            if (self.cells[cRows-1][col] == 0):
+                deadSeg = Seg(Point(col, cRows+1), Point(col+1, cRows+1))
+                if (deadSeg in self.checkSegs):
+                    #print "FAR TOP"
+                    self.checkSegs.remove(deadSeg)
+        return None
+                        
+                    
 
     def hasSeg(self, row, col, dir):
+        y = row
+        x = col
         if (dir == "left"):
-            return (Seg(Point(row, col), Point(row+1,col)) in self.segs)
+            return (Seg(Point(x, y), Point(x, y+1)) in self.checkSegs)
         elif (dir == "right"):
-            return (Seg(Point(row, col+1), Point(row+1,col+1)) in self.segs)
+            return (Seg(Point(x+1,y), Point(x+1,y+1)) in self.checkSegs)
         elif (dir == "up"):
-            return (Seg(Point(row+1, col), Point(row+1,col+1)) in self.segs)
+            return (Seg(Point(x, y+1), Point(x+1, y+1)) in self.checkSegs)
         elif (dir == "down"):
-            return (Seg(Point(row, col), Point(row,col+1)) in self.segs)
+            return (Seg(Point(x, y), Point(x+1, y)) in self.checkSegs)
         else:
             assert(False), "not a direction"
+
+    def deleteCellsInDir(self, delRow, delCol, dir):
+        # destructive function
+        (rows, cols) = (self.rows, self.cols)
+        (cRows, cCols) = (rows - 1, cols - 1)
+        #print "delRow, delCol",(delRow, delCol)
+        #print "cRows, cCols", (cRows, cCols)
+        if ((delRow == cRows) or (delRow < 0) or
+            (delCol == cCols) or (delCol < 0)):
+            # out of bounds
+        #    print "OUT OF BOUNDS"
+            return None
+        if (dir == "left"):
+        #    print "... too theeee lleeffttt"
+            for col in xrange(0, delCol+1):
+        #        print "left -> ", delRow, col
+                self.cells[delRow][col] = 0
+        #    print self.cells
+        elif (dir == "right"):
+        #    print "... too theeee rriiggthhtt"
+            for col in xrange(delCol, cCols):
+        #        print "right -> ", delRow, col
+                self.cells[delRow][col] = 0
+        #    print self.cells
+        elif (dir == "down"):
+            for row in xrange(0, delRow+1):
+        #        print "down -> ", row, delCol
+                self.cells[row][delCol] = 0
+        #    print self.cells
+        elif (dir == "up"):
+            for row in xrange(delRow, cRows):
+        #        print "up -> ", row, delCol
+                self.cells[row][delCol] = 0
+        #    print self.cells
+        else:
+            assert(False), "not a direction"
+
 
     def cullSegs(self, eye):
         # only return segs which could possibly be visible to reduce 
@@ -924,25 +1045,38 @@ class Maze(object):
         (rows, cols) = (self.rows, self.cols)
         (cRows, cCols) = (rows - 1, cols - 1)
         self.initCellsAsOne()
+        self.checkSegs = copy.copy(self.segs)
+        #print self.cells
         for col in xrange(eyeCol, cCols):
             if self.hasSeg(eyeRow, col, "right"):
-                self.deleteCellInDir(eyeRow, col, "right")
+                #print "RIGHT"
+                self.deleteCellsInDir(eyeRow, col+1, "right")
+                break
         for col in xrange(eyeCol, -1, -1):
             if self.hasSeg(eyeRow, col, "left"):
-                self.deleteCellInDir(eyeRow, col, "left")
+                #print "LEFT"
+                self.deleteCellsInDir(eyeRow, col-1, "left")
+                break
         for row in xrange(eyeRow, cRows):
             if self.hasSeg(row, eyeCol, "up"):
-                self.deleteCellInDir(row, eyeCol, "up")
+                #print "UP"
+                self.deleteCellsInDir(row+1, eyeCol, "up")
+                break
         for row in xrange(eyeRow, -1, -1):
             if self.hasSeg(row, eyeCol, "down"):
-                self.deleteCellInDir(row, eyeCol, "down")
+                #print "DOWN"
+                self.deleteCellsInDir(row-1, eyeCol, "down")
+                break
         while(self.cullCorners(eye)):
             # cullCorners will remove cells invisible by a corner
             # it will return true if something was removed
             pass
         self.removeDeadSandwichedSegs()
         # will remove segs sandwiched between dead cells
-        return set(self.segs)
+        #print "\n\n####################################"
+        #print self.cells
+        #print eye
+        return set(self.checkSegs)
 
 
         
@@ -1023,8 +1157,8 @@ def run():
 
 def init():
     canvas.data.counter = 1
-    canvas.eye = Point(2,0.5)
-    canvas.maze = Maze(7,7)
+    canvas.eye = Point(0.5,0.5)
+    canvas.maze = Maze(14,14)
     canvas.segs = set(canvas.maze.segs)
     canvas.v = (0,0)
 #    canvas.segs = set([Seg(Point(4,1),Point(4,5)),
@@ -1054,10 +1188,21 @@ def redrawAll():
     eye = canvas.eye
     segs = canvas.segs
     canvas.create_line(5+50*eye.x-1, 5+50*eye.y-1, 5+50*eye.x+1, 5+50*eye.y+1, fill="red", width=2)
-    for seg in segs:
-        canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
+    #for seg in segs:
+    #    canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
     colors = ["red"]
+    canvas.maze.initCellsAsOne()
     possibleSegs = canvas.maze.cullSegs(eye)
+    #possibleSegs = segs
+    #print "########################################"
+    #print "########################################"
+    #print possibleSegs
+    #print "########################################"
+    #print segs
+    #print "########################################"
+#    for s in possibleSegs:
+#        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
+#                           fill=colors[0], width=3)
     visible = obstructSegs(eye, possibleSegs)
     #print "visible = ",visible
     for s in visible:
@@ -1073,7 +1218,7 @@ def keyPressed(event):
         canvas.v = (-0.1,0)
     elif (event.keysym == "Right"):
         canvas.v = (0.1,0)
-    redrawAll()
+    #redrawAll()
     #print """
     #########################################################
     ####EYE = """,canvas.eye,"""
@@ -1081,6 +1226,7 @@ def keyPressed(event):
 
 def keyReleased(event):
     canvas.v = (0,0)
+    #redrawAll()
 
 
 
