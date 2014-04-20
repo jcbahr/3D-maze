@@ -8,7 +8,9 @@ import math
 from Tkinter import *
 import random
 import time
-random.seed(41)
+#random.seed(41)
+
+CYCLE_AMOUNT = 5 # higher number -> fewer cycles
 
 ################################################################################
 ##### Point & Seg Helper Functions #############################################
@@ -21,7 +23,8 @@ def flipCoin():
 
 def smallChance():
     choices = [True]
-    choices.append([False]*3)
+    choices.extend([False]*CYCLE_AMOUNT)
+    print choices
     return random.choice(choices)
 
 
@@ -835,9 +838,14 @@ class Maze(object):
                                   Point(cRow+1,cCol+1))
                 if (curCell == targetCell):
                     if (dividingSeg in self.segs):
-                        continue
-                    else:# True: # NOTE: NOTE: NOTE:smallChance():
-                        self.removeSeg(dividingSeg, curCell, targetCell)
+                        if (smallChance()):
+                            print "YES"
+                            self.removeSeg(dividingSeg, curCell, targetCell)
+                        else:
+                            print "OH WELL"
+                        #continue
+                    #else:# True: # NOTE: NOTE: NOTE:smallChance():
+                    #    self.removeSeg(dividingSeg, curCell, targetCell)
                     #else:
                     #    continue
                 else:
@@ -1158,7 +1166,7 @@ def run():
 def init():
     canvas.data.counter = 1
     canvas.eye = Point(0.5,0.5)
-    canvas.maze = Maze(14,14)
+    canvas.maze = Maze(12,12)
     canvas.segs = set(canvas.maze.segs)
     canvas.v = (0,0)
 #    canvas.segs = set([Seg(Point(4,1),Point(4,5)),
@@ -1182,14 +1190,14 @@ def timerFired():
     #print canvas.data.counter
     canvas.after(delay, timerFired)
 
-# TODO: have 3D and top-down drawing modes
+# TODO: have 3D (with glasses), 3D (without), and top-down drawing modes
 def redrawAll():
     canvas.delete(ALL)
     eye = canvas.eye
     segs = canvas.segs
     canvas.create_line(5+50*eye.x-1, 5+50*eye.y-1, 5+50*eye.x+1, 5+50*eye.y+1, fill="red", width=2)
-    #for seg in segs:
-    #    canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
+    for seg in segs:
+        canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
     colors = ["red"]
     canvas.maze.initCellsAsOne()
     possibleSegs = canvas.maze.cullSegs(eye)
@@ -1200,14 +1208,14 @@ def redrawAll():
     #print "########################################"
     #print segs
     #print "########################################"
-#    for s in possibleSegs:
-#        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
-#                           fill=colors[0], width=3)
-    visible = obstructSegs(eye, possibleSegs)
-    #print "visible = ",visible
-    for s in visible:
+    for s in possibleSegs:
         canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
                            fill=colors[0], width=3)
+    visible = obstructSegs(eye, possibleSegs)
+    #print "visible = ",visible
+#    for s in visible:
+#        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
+#                           fill=colors[0], width=3)
 
 def keyPressed(event):
     if (event.keysym == "Up"):
