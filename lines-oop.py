@@ -24,7 +24,6 @@ def flipCoin():
 def smallChance():
     choices = [True]
     choices.extend([False]*CYCLE_AMOUNT)
-    print choices
     return random.choice(choices)
 
 
@@ -730,8 +729,9 @@ def obstructSegs(eye, segSet):
     (as a set) of each segment."""
     visible = set()
     for seg in segSet:
-        otherSegs = copy.copy(segSet)
-        otherSegs.remove(seg)
+        otherSegs = segSet - set([seg])
+        #otherSegs = copy.copy(segSet)
+        #otherSegs.remove(seg)
         visible = visible.union(obstructSegViaSegSet(eye, otherSegs, seg))
     return visible
 
@@ -839,15 +839,7 @@ class Maze(object):
                 if (curCell == targetCell):
                     if (dividingSeg in self.segs):
                         if (smallChance()):
-                            print "YES"
                             self.removeSeg(dividingSeg, curCell, targetCell)
-                        else:
-                            print "OH WELL"
-                        #continue
-                    #else:# True: # NOTE: NOTE: NOTE:smallChance():
-                    #    self.removeSeg(dividingSeg, curCell, targetCell)
-                    #else:
-                    #    continue
                 else:
                     self.removeSeg(dividingSeg, curCell, targetCell)
             else: # try to go north
@@ -1166,7 +1158,7 @@ def run():
 def init():
     canvas.data.counter = 1
     canvas.eye = Point(0.5,0.5)
-    canvas.maze = Maze(12,12)
+    canvas.maze = Maze(14,14)
     canvas.segs = set(canvas.maze.segs)
     canvas.v = (0,0)
 #    canvas.segs = set([Seg(Point(4,1),Point(4,5)),
@@ -1208,14 +1200,14 @@ def redrawAll():
     #print "########################################"
     #print segs
     #print "########################################"
-    for s in possibleSegs:
-        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
-                           fill=colors[0], width=3)
-    visible = obstructSegs(eye, possibleSegs)
-    #print "visible = ",visible
-#    for s in visible:
+#    for s in possibleSegs:
 #        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
 #                           fill=colors[0], width=3)
+    visible = obstructSegs(eye, possibleSegs)
+    #print "visible = ",visible
+    for s in visible:
+        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
+                           fill=colors[0], width=3)
 
 def keyPressed(event):
     if (event.keysym == "Up"):
