@@ -11,6 +11,8 @@ import time
 #random.seed(41)
 
 CYCLE_AMOUNT = 5 # higher number -> fewer cycles
+CAM_H = 0.25
+WALL_H = 0.5
 
 ################################################################################
 ##### Point & Seg Helper Functions #############################################
@@ -37,7 +39,14 @@ def isNumber(x):
     return type(x) in (int, long, float)
 
 def sign(x):
-    """Returnes "+" for non-negative numbers; "-" otherwise"""
+    """Returns "+" for non-negative numbers; "-" otherwise"""
+
+def mathSign(x):
+    if (x == 0):
+        return 0
+    else:
+        return (x/abs(x))
+
 
 def xKey(point):
     return point.x
@@ -59,6 +68,25 @@ def extremeY(pointSet):
     minPoint = min(pointSet, key=yKey)
     maxPoint = max(pointSet, key=yKey)
     return (minPoint, maxPoint)
+
+# from http://www.kosbie.net/cmu/spring-14/15-112/handouts/grayScale.py
+def hexColor(red, green, blue):
+    return ("#%02x%02x%02x" % (red, green, blue))
+
+# color idea from Delancey Wu
+def makeColor(row, col, rows, cols):
+    if ((row == 0) and (col == 0)):
+        color = hexColor(255,255,255)
+    elif (((row == rows-1) and (col == cols-2)) or
+          ((row == rows-2) and (col == cols-1))):
+        color = hexColor(0,0,0)
+    else:
+        green = 255*(row+col)/float(rows+cols)
+        red = 255*(rows+cols-row-col)/float(rows+cols)
+        blue = 0
+        color = hexColor(red, green, blue)
+    return color
+
 
 ################################################################################
 ##### Point, Seg, Ray Classes ##################################################
@@ -88,14 +116,13 @@ class Point(object):
         return hash(hashables)
 
 class Seg(object):
-    def __init__(self, p1, p2):
+    def __init__(self, p1, p2, color):
         # sanity check
         if not (type(p1) == type(p2) == Point):
             assert(False), "cannot make a seg from nonpoints"
-#        if (p1 == p2):
-#            assert(False), "cannot make a seg from identical points"
         self.p1 = p1
         self.p2 = p2
+        self.color = color
         self.isVert = (self.kind() == "vert")
         self.isHoriz = (self.kind() == "horiz")
 
@@ -126,6 +153,16 @@ class Seg(object):
         else:
             return "other"
 
+    def withinDist(self, eye, dist):
+        """Returns True if eye is within a certain distance of
+        the segment (in a rectangular sense around the edges)"""
+        minX = min(self.p1.x, self.p2.x)
+        maxX = max(self.p1.x, self.p2.x)
+        minY = min(self.p1.y, self.p2.y)
+        maxY = max(self.p1.y, self.p2.y)
+        return ((minX - dist < eye.x < maxX + dist) and
+                (minY - dist < eye.y < maxY + dist))
+
 
 class Ray(object):
     def __init__(self, eye, target):
@@ -134,10 +171,23 @@ class Ray(object):
         self.eye = eye
         self.dx = target.x - eye.x
         self.dy = target.y - eye.y
+        self.target = target
 
     def __eq__(self, other):
         return ((self.eye == other.eye) and (self.dx == other.dx)
             and (self.dy == other.dy))
+
+    def __str__(self):
+        return str(self.eye) + " -> " + str(self.target)
+
+    def __repr__(self):
+        return "Ray("+repr(self.eye)+","+repr(self.target)+")"
+
+    def __sub__(self, other):
+        if (self.eye != other.eye):
+            assert(False), "cannot subtract"
+        return Ray(other.target, self.target)
+
 
     def dot(self, other):
         if (type(other) != Ray):
@@ -156,6 +206,104 @@ class Ray(object):
             assert(False), "rays have different starting points"
         angle = math.acos(self.dot(other) / float(self.norm() * other.norm()))
         return angle # radians
+
+    def rotate(self, angle):
+        # angle in radians
+        # taken from jbahr-hw8.py
+        rotationMatrix = Matrix([[math.cos(angle), -math.sin(angle)],
+                                 [math.sin(angle), math.cos(angle)]])
+        oldNorm = self.norm()
+        dir = Vector([self.dx, self.dy])
+        newDir = rotationMatrix.mult(dir)
+        newPoint = Point(newDir.elements[0], newDir.elements[1])
+        newTarget = Point(newPoint.x + self.eye.x, newPoint.y + self.eye.y)
+        newRay = Ray(self.eye, newTarget)
+        #newNorm = newRay.norm()
+        ## we *ensure* the magnitude of the ray is constant under rotation
+        #finalRay = newRay * (oldNorm / newNorm)
+        return newRay
+        
+
+class Matrix(object):
+    def __init__(self, elements):
+        self.elements = elements
+        self.rows = len(elements)
+        if (type(elements[0]) == list):
+            self.cols = len(elements[0])
+        else:
+            # handle vectors too
+            self.cols = 1
+
+    def mult(self, other):
+        if (type(other) != Vector):
+            assert(False), "cannot be multiplied"
+        # other must be a vector
+        def dotprod(row):
+            return Vector(row).dot(other)
+        # using map was the idea of James Wu 
+        return Vector(map(dotprod, self.elements))
+
+    def transpose(self):
+        # this implementation was taken from recitation
+        return Matrix(zip(*self.elements))
+
+    def __str__(self):
+        output = ""
+        for i in xrange(self.rows):
+            for j in xrange(self.cols):
+                output += str(self.elements[i][j])
+            output += "\n"
+        return output
+
+    def __repr__(self):
+        return "Matrix("+str(self.elements)+")"
+
+class Vector(Matrix):
+    def __init__(self, elements):
+        # column vector
+        self.elements = elements
+        self.rows = len(elements)
+
+    def dot(self, other):
+        if (type(other) != Vector):
+            assert(False), "cannot dot non-vectors"
+        def prod(a):
+            return a[0] * a[1]
+        return sum(map(prod,zip(self.elements,other.elements)))
+
+    def norm(self):
+        return math.sqrt(self.dot(self))
+
+    def __mul__(self, other):
+        if (not isNumber(other)):
+            assert(False), "cannot multiply"
+        return Vector(map(lambda x : other*x, self.elements))
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __add__(self, other):
+        newElements = map(sum, zip(self.elements, other.elements))
+        return Vector(newElements)
+
+    def __neg__(self):
+        return Vector(map(lambda x: -x, self.elements))
+
+class ScreenSeg(object):
+    # keeps track of distance from center of screen and height
+    def __init__(self, cam, seg):
+        # MUST be given a seg that is visible in the direction of the cam
+        # seg pruning must be done beforehand!
+        # follows is some linear algebra
+        v1 = Ray(cam.eye, seg.p1)
+        v2 = Ray(cam.eye, seg.p2)
+        self.h1 = min(cam.height, WALL_H * cam.viewRay.norm() / v1.norm())
+        self.h2 = min(cam.height, WALL_H * cam.viewRay.norm() / v2.norm())
+        screenV1 = v1 * (cam.viewRay.norm()**2 / cam.viewRay.dot(v1))
+        screenV2 = v2 * (cam.viewRay.norm()**2 / cam.viewRay.dot(v2))
+        self.x1 = screenV1.norm() * sign(screenV1 - cam.viewRay)
+        self.x2 = screenV2.norm() * sign(screenV2 - cam.viewRay)
+        
 
 
 class Intersection(object):
@@ -359,7 +507,7 @@ def normNormHorizIntersect(cross1,cross2,seg):
         elif (maxCrossPoint.x < maxSegPoint.x):
             # obscured on left
             #print "obscured on left"
-            return set([Seg(maxCrossPoint, maxSegPoint)])
+            return set([Seg(maxCrossPoint, maxSegPoint, seg.color)])
         else:
             # entirely obscured
             #print "entirely obscured"
@@ -368,12 +516,12 @@ def normNormHorizIntersect(cross1,cross2,seg):
         if (maxCrossPoint.x < maxSegPoint.x):
             # centrally obscured
             #print "centrally obscured"
-            return set([Seg(minSegPoint,minCrossPoint),
-                        Seg(maxCrossPoint,maxSegPoint)])
+            return set([Seg(minSegPoint,minCrossPoint, seg.color),
+                        Seg(maxCrossPoint,maxSegPoint, seg.color)])
         else:
             # obscured on right
             #print "obscured on right"
-            return set([Seg(minSegPoint,minCrossPoint)])
+            return set([Seg(minSegPoint,minCrossPoint, seg.color)])
     else:
         return set([seg])
 
@@ -394,7 +542,7 @@ def normNormVertIntersect(cross1,cross2,seg):
         elif (maxCrossPoint.y < maxSegPoint.y):
             # obscured on top
             #print "obscured on top"
-            return set([Seg(maxCrossPoint, maxSegPoint)])
+            return set([Seg(maxCrossPoint, maxSegPoint, seg.color)])
         else:
             # entirely obscured
             #print "entirely obscured"
@@ -403,12 +551,12 @@ def normNormVertIntersect(cross1,cross2,seg):
         if (maxCrossPoint.y < maxSegPoint.y):
             # centrally obscured
             #print "centrally obscured"
-            return set([Seg(minSegPoint,minCrossPoint),
-                        Seg(maxCrossPoint,maxSegPoint)])
+            return set([Seg(minSegPoint,minCrossPoint, seg.color),
+                        Seg(maxCrossPoint,maxSegPoint, seg.color)])
         else:
             # obscured on bottom
             #print "obscured on bottom"
-            return set([Seg(minSegPoint,minCrossPoint)])
+            return set([Seg(minSegPoint,minCrossPoint, seg.color)])
     else:
         return set([seg])
 
@@ -439,7 +587,7 @@ def normBackVertIntersect(normCross, backCross, wall, seg):
         if (topPoint.y < botPoint.y):
             return set()
         else:
-            return set([Seg(botPoint, topPoint)])
+            return set([Seg(botPoint, topPoint, seg.color)])
     else:
         # want top half of line
         botPoint = extremeY(set([minSegPoint, normCross.point]))[1] # max
@@ -447,7 +595,7 @@ def normBackVertIntersect(normCross, backCross, wall, seg):
         if (topPoint.y < botPoint.y):
             return set()
         else:
-            return set([Seg(botPoint, topPoint)])
+            return set([Seg(botPoint, topPoint, seg.color)])
 
 def normBackHorizIntersect(normCross, backCross, wall, seg):
     cross = intersectWalls(wall, seg)
@@ -460,7 +608,7 @@ def normBackHorizIntersect(normCross, backCross, wall, seg):
         if (rightPoint.x <= leftPoint.x):
             return set()
         else:
-            return set([Seg(leftPoint, rightPoint)])
+            return set([Seg(leftPoint, rightPoint, seg.color)])
     else:
         # want right half of line
         leftPoint = extremeX(set([minSegPoint, normCross.point]))[1] # max
@@ -468,7 +616,7 @@ def normBackHorizIntersect(normCross, backCross, wall, seg):
         if (rightPoint.x <= leftPoint.x):
             return set()
         else:
-            return set([Seg(leftPoint, rightPoint)])
+            return set([Seg(leftPoint, rightPoint, seg.color)])
     
 
 def normInfIntersect(cross,infCross,wall,seg):
@@ -491,7 +639,7 @@ def normInfVertIntersect(cross, infCross, wall, seg):
         if (topPoint.y < botPoint.y):
             return set()
         else:
-            return set([Seg(botPoint, topPoint)])
+            return set([Seg(botPoint, topPoint, seg.color)])
     elif (infCross.point.y < 0):
         # obscured below cross
         topPoint = extremeY(set([maxSegPoint, cross.point]))[1] # max
@@ -499,7 +647,7 @@ def normInfVertIntersect(cross, infCross, wall, seg):
         if (topPoint.y < botPoint.y):
             return set()
         else:
-            return set([Seg(botPoint, topPoint)])
+            return set([Seg(botPoint, topPoint, seg.color)])
     else:
         assert(False), "infCross should be vertical"
 
@@ -514,7 +662,7 @@ def normInfHorizIntersect(cross, infCross, wall, seg):
         if (rightPoint.x < leftPoint.x):
             return set()
         else:
-            return set([Seg(leftPoint, rightPoint)])
+            return set([Seg(leftPoint, rightPoint, seg.color)])
     elif (infCross.point.x < 0):
         # obscured to left of cross
         rightPoint = extremeX(set([maxSegPoint, cross.point]))[1] # max
@@ -522,7 +670,7 @@ def normInfHorizIntersect(cross, infCross, wall, seg):
         if (rightPoint.x < leftPoint.x):
             return set()
         else:
-            return set([Seg(leftPoint, rightPoint)])
+            return set([Seg(leftPoint, rightPoint, seg.color)])
     else:
         assert(False), "infCross should be horizontal"
 
@@ -564,7 +712,7 @@ def behindBackVertIntersect(behindCross, backCross, wall, seg):
         if (botSegPoint.y >= topPoint.y):
             return set()
         else:
-            return set([Seg(botSegPoint, topPoint)])
+            return set([Seg(botSegPoint, topPoint, seg.color)])
     else:
         #print "wall crosses below"
         (botSegPoint,topSegPoint) = extremeY(set([seg.p1,seg.p2]))
@@ -572,7 +720,7 @@ def behindBackVertIntersect(behindCross, backCross, wall, seg):
         if (topSegPoint.y <= botPoint.y):
             return set()
         else:
-            return set([Seg(botPoint, topSegPoint)])
+            return set([Seg(botPoint, topSegPoint, seg.color)])
 
 
 def behindBackHorizIntersect(behindCross, backCross, wall, seg):
@@ -588,14 +736,14 @@ def behindBackHorizIntersect(behindCross, backCross, wall, seg):
         if (botSegPoint.x >= topPoint.x):
             return set()
         else:
-            return set([Seg(botSegPoint, topPoint)])
+            return set([Seg(botSegPoint, topPoint, seg.color)])
     else:
         (botSegPoint,topSegPoint) = extremeX(set([seg.p1,seg.p2]))
         botPoint = extremeX(set([botSegPoint, newCross]))[1] # max
         if (topSegPoint.x <= botPoint.x):
             return set()
         else:
-            return set([Seg(botPoint, topSegPoint)])
+            return set([Seg(botPoint, topSegPoint, seg.color)])
 
 
 
@@ -627,7 +775,7 @@ def behindInfVertIntersect(behindCross,infCross,wall,seg):
         if (topPoint.y < botPoint.y):
             return set()
         else:
-            return set([Seg(botPoint, topPoint)])
+            return set([Seg(botPoint, topPoint, seg.color)])
     elif (infCross.point.y < 0):
         # wall below eye
         topPoint = extremeY(set([maxSegPoint, cross]))[1] # max
@@ -635,7 +783,7 @@ def behindInfVertIntersect(behindCross,infCross,wall,seg):
         if (topPoint.y < botPoint.y):
             return set()
         else:
-            return set([Seg(botPoint, topPoint)])
+            return set([Seg(botPoint, topPoint, seg.color)])
     else:
         assert(False), "infCross should be vertical"
         
@@ -651,7 +799,7 @@ def behindInfHorizIntersect(behindCross,infCross,wall,seg):
         if (rightPoint.x < leftPoint.x):
             return set()
         else:
-            return set([Seg(leftPoint, rightPoint)])
+            return set([Seg(leftPoint, rightPoint, seg.color)])
     elif (infCross.point.x < 0):
         # wall to left of eye
         leftPoint = extremeX(set([minSegPoint, cross]))[1] # max
@@ -659,7 +807,7 @@ def behindInfHorizIntersect(behindCross,infCross,wall,seg):
         if (rightPoint.x < leftPoint.x):
             return set()
         else:
-            return set([Seg(leftPoint, rightPoint)])
+            return set([Seg(leftPoint, rightPoint, seg.color)])
     else:
         assert(False), "infCross should be horizontal"
 
@@ -741,9 +889,24 @@ def obstructSegs(eye, segSet):
 ################################################################################
 
 class Camera(object):
-    def __init__(self, startPoint, startDir):
-        pass
-    pass
+    def __init__(self, viewRay):
+        if (type(viewRay) != Ray):
+            assert(False), "Camera requires Ray"
+        self.viewRay = viewRay
+        self.viewDir = Vector([viewRay.eye.x, viewRay.eye.y])
+        self.rightRay = viewRay.rotate(-math.pi/2)
+        self.height = CAM_H
+
+    def rotate(self, angle):
+        # angle in radians
+        self.viewRay = self.viewRay.rotate(angle)
+
+    def translate(self, vector):
+        newX = self.viewRay.eye.x + vector.elements[0]
+        newY = self.viewRay.eye.y + vector.elements[1]
+        newEye = Point(newX, newY)
+        self.viewRay = Ray(newEye, self.viewRay.target)
+        
 
 ################################################################################
 ##### Maze Class ###############################################################
@@ -755,7 +918,6 @@ class Maze(object):
         self.initCells()
         self.initPoints()
         self.initSegs()
-        self.initCamera()
         self.makeMaze()
 
     def initCells(self):
@@ -785,18 +947,14 @@ class Maze(object):
         self.segs = list()
         for row in xrange(rows):
             for col in xrange(cols):
+                curPoint = Point(row,col)
+                color = makeColor(row, col, rows, cols)
                 if (row + 1 < rows):
                     nextPoint = Point(row+1,col)
-                    self.segs.append(Seg(Point(row,col), nextPoint))
+                    self.segs.append(Seg(curPoint, nextPoint, color))
                 if (col + 1 < cols):
                     nextPoint = Point(row,col+1)
-                    self.segs.append(Seg(Point(row,col), nextPoint))
-
-    def initCamera(self):
-        # we start closest to (0,0)
-        startPoint = Point(0.5, 0.5)
-        startDir = Ray(startPoint, Point(1,0))
-        self.camera = Camera(startPoint, startDir)
+                    self.segs.append(Seg(curPoint, nextPoint, color))
 
     def removeSeg(self, seg, cellVal1, cellVal2):
         if (seg in self.segs):
@@ -1092,6 +1250,7 @@ class Maze(object):
 ################################################################################
 
 
+# taken from jbahr-hw9.py
 class Animation(object):
     def __init__(self, width=500, height=300):
         self.root = Tk()
@@ -1136,10 +1295,151 @@ class Animation(object):
 
 # TODO: Move animation functions into MazeGame class
 class MazeGame(Animation):
-    def __init__(self):
+    def __init__(self, mazeRows, mazeCols, width=700, height=500):
+        self.mazeRows = mazeRows
+        self.mazeCols = mazeCols
+        self.mode = "3D"
+        super(MazeGame, self).__init__(width, height)
+        self.root.resizable(width=0, height=0) # non-resizable
         pass
 
+######################
+####### Model ########
+######################
+
     def init(self):
+        self.initCamera()
+        self.initMaze()
+
+    def initCamera(self):
+        self.speed = 0.05
+        self.rotateSpeed = math.pi/8
+        self.cameraLength = 0.1
+        # we start closest to (0,0)
+        # facing in the x direction
+        startPoint = Point(0.5, 0.5)
+        viewPoint = Point(0.5 + self.cameraLength, 0.5)
+        self.camera = Camera(Ray(startPoint, viewPoint))
+        self.cameraVel = Vector([0,0])
+        self.cameraRotVel = 0
+
+    def initMaze(self):
+        print "Generating random maze..."
+        self.maze = Maze(self.mazeRows, self.mazeCols)
+        print "Finished generating maze!"
+
+
+######################
+##### Controller #####
+######################
+
+    def timerFired(self):
+        self.calculateVisibleSegs()
+        self.projectVisibleSegsToScreen()
+        self.updateCamera()
+
+    def calculateVisibleSegs(self):
+        pass
+
+    def projectVisibleSegsToScreen(self):
+        pass
+
+    def updateCamera(self):
+        self.camera.rotate(self.cameraRotVel)
+        self.camera.translate(self.cameraVel)
+        if not self.cameraIsLegal():
+            # move back!
+            self.camera.translate(- self.cameraVel)
+
+    def cameraIsLegal(self):
+        # check that camera is no more than 1.5*self.cameraLength
+        # from any wall
+        for seg in self.visibleSegs:
+            if (seg.withinDist(self.camera.viewRay.eye,1.5*self.cameraLength)):
+                return False
+        return True
+
+
+
+    def mousePressed(self):
+        pass
+
+    def keyPressed(self, event):
+        arrows = ["Up", "Down", "Left", "Right"]
+        firstPersonModes = ["3D", "3DG"]
+        topDownModes = ["2D"]
+        if (self.mode in firstPersonModes):
+            self.firstPersonKeyPressed(event)
+        elif (self.mode in topDownModes):
+            self.topDownKeyPressed(event)
+        else:
+            assert(False), "not a valid mode"
+        if (event.keysym == "h"):
+            # toggle help screen
+            self.isHelp = not self.isHelp
+        elif (event.keysym == "1"):
+            self.mode == "2D"
+        elif (event.keysym == "2"):
+            self.mode = "3D"
+        elif (event.keysym == "3"):
+            self.mode = "3DG"
+
+
+    def firstPersonKeyPressed(self, event):
+        if (event.keysym == "Up"):
+            self.cameraVel = self.speed * self.camera.viewDir
+        elif (event.keysym == "Down"):
+            self.cameraVel = - self.speed * self.camera.viewDir
+        elif (event.keysym == "Right"):
+            # clockwise
+            self.cameraRotVel = - self.rotateSpeed
+        elif (event.keysym == "Left"):
+            # counter-clockwise
+            self.cameraRotVel = self.rotateSpeed
+
+    def topDownKeyPressed(self, event):
+        if (event.keysym == "Up"):
+            # up is down in TkInter
+            self.cameraVel = self.speed * Vector([0,-1])
+        elif (event.keysym == "Down"):
+            # up is down in TkInter
+            self.cameraVel = self.speed * Vector([0,1])
+        elif (event.keysym == "Right"):
+            self.cameraVel = self.speed * Vector([1,0])
+        elif (event.keysym == "Left"):
+            self.cameraVel = self.speed * Vector([-1,0])
+        # ensure no more rotation
+        self.cameraRotVel = 0
+
+    def keyReleased(self, event):
+        firstPersonModes = ["3D", "3DG"]
+        topDownModes = ["2D"]
+        if (self.mode in firstPersonModes):
+            return self.firstPersonKeyReleased(event)
+        elif (self.mode in topDownModes):
+            return self.topDownKeyReleased(event)
+        else:
+            assert(False), "not a valid mode"
+
+    def firstPersonKeyReleased(self, event):
+        translations = ["Up", "Down"]
+        rotations = ["Left", "Right"]
+        if (event.keysym in translations):
+           self.cameraVel = Vector([0,0])
+        elif (event.keysym in rotations):
+            self.cameraRotVel = 0
+
+    def topDownKeyReleased(self, event):
+        translations = ["Up", "Down", "Left", "Right"]
+        if (event.keysym in translations):
+            self.cameraVel = Vector([0,0])
+
+
+######################
+######## View ########
+######################
+
+    def redrawAll(self):
         pass
 
 def run():
@@ -1188,8 +1488,8 @@ def redrawAll():
     eye = canvas.eye
     segs = canvas.segs
     canvas.create_line(5+50*eye.x-1, 5+50*eye.y-1, 5+50*eye.x+1, 5+50*eye.y+1, fill="red", width=2)
-    for seg in segs:
-        canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
+#    for seg in segs:
+#        canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
     colors = ["red"]
     canvas.maze.initCellsAsOne()
     possibleSegs = canvas.maze.cullSegs(eye)
@@ -1230,7 +1530,7 @@ def keyReleased(event):
 
 
 
-run()
+#run()
 
 
 
