@@ -1375,7 +1375,6 @@ class MazeGame(Animation):
 ######################
 
     def timerFired(self):
-        print self.mode
         firstPersonModes = ["3D", "3DG"]
         topDownModes = ["2D"]
         if (self.mode in firstPersonModes):
@@ -1485,17 +1484,16 @@ class MazeGame(Animation):
 
     def firstPersonKeyPressed(self, event):
         viewDir = Vector([self.camera.viewRay.dx, self.camera.viewRay.dy])
-        print viewDir
         if (event.keysym == "Up"):
             self.cameraVel = (self.speed/viewDir.norm()) * viewDir
         elif (event.keysym == "Down"):
             self.cameraVel = (- self.speed/viewDir.norm()) * viewDir
         elif (event.keysym == "Right"):
             # clockwise
-            self.cameraRotVel = - self.rotateSpeed
+            self.cameraRotVel = self.rotateSpeed
         elif (event.keysym == "Left"):
             # counter-clockwise
-            self.cameraRotVel = self.rotateSpeed
+            self.cameraRotVel = - self.rotateSpeed
 
     def topDownKeyPressed(self, event):
         if (event.keysym == "Up"):
@@ -1633,8 +1631,8 @@ class MazeGame(Animation):
         scaleX = (self.width / CAM_WIDTH)
         scaleY = (self.height / CAM_H)
         for s in self.screenSegs:
-            left = cx + s.x1*scaleX
-            right = cx + s.x2*scaleX
+            left = cx - s.x1*scaleX
+            right = cx - s.x2*scaleX
             leftTop = cy + s.h1*scaleY
             leftBot = cy - s.h1*scaleY
             rightTop = cy + s.h2*scaleY
@@ -1648,7 +1646,7 @@ class MazeGame(Animation):
         pass
 
 
-game = MazeGame(5, 5)
+game = MazeGame(10, 10)
 game.run()
 
 
