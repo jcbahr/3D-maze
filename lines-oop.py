@@ -1324,6 +1324,7 @@ class MazeGame(Animation):
 ######################
 
     def init(self):
+        self.isGameOver = False
         self.initCamera()
         self.initMaze()
 
@@ -1503,9 +1504,19 @@ class MazeGame(Animation):
 ######## View ########
 ######################
 
+    def drawGameOver(self):
+        self.canvas.delete(ALL)
+        cx = self.width/2
+        cy = self.height/2
+        self.canvas.create_text(cx, cy, text="You Win!",
+                                font="Helvetica 36 bold")
+
+
     def redrawAll(self):
         self.canvas.delete(ALL)
-        if (self.mode == "2D"):
+        if (self.isGameOver):
+            self.drawGameOver()
+        elif (self.mode == "2D"):
             self.redraw2D()
         elif (self.mode == "3D"):
             self.redraw3D()
