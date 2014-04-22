@@ -8,10 +8,11 @@ import math
 from Tkinter import *
 import random
 import time
-#random.seed(41)
+random.seed(41)
 
 CYCLE_AMOUNT = 5 # higher number -> fewer cycles
-CAM_H = 0.25
+CAM_H = 0.125
+CAM_WIDTH = 0.35
 WALL_H = 0.5
 
 ################################################################################
@@ -82,8 +83,8 @@ def makeColor(row, col, rows, cols):
         color = hexColor(0,0,0)
     else:
         green = 255*(row+col)/float(rows+cols)
-        red = 255*(rows+cols-row-col)/float(rows+cols)
-        blue = 0
+        red = 32
+        blue = 255*(rows+cols-row-col)/float(rows+cols)
         color = hexColor(red, green, blue)
     return color
 
@@ -116,7 +117,7 @@ class Point(object):
         return hash(hashables)
 
 class Seg(object):
-    def __init__(self, p1, p2, color):
+    def __init__(self, p1, p2, color=hexColor(0,0,0)):
         # sanity check
         if not (type(p1) == type(p2) == Point):
             assert(False), "cannot make a seg from nonpoints"
@@ -187,6 +188,14 @@ class Ray(object):
         if (self.eye != other.eye):
             assert(False), "cannot subtract"
         return Ray(other.target, self.target)
+
+    def __mul__(self, scale):
+        newTargetX = self.eye.x + scale*self.dx
+        newTargetY = self.eye.y + scale*self.dy
+        return Ray(self.eye, Point(newTargetX, newTargetY))
+
+    def __rmul__(self, scale):
+        return self.__mul__(scale)
 
 
     def dot(self, other):
@@ -297,14 +306,14 @@ class ScreenSeg(object):
         # follows is some linear algebra
         v1 = Ray(cam.eye, seg.p1)
         v2 = Ray(cam.eye, seg.p2)
-        self.h1 = min(cam.height, WALL_H * cam.viewRay.norm() / v1.norm())
-        self.h2 = min(cam.height, WALL_H * cam.viewRay.norm() / v2.norm())
+        # h > CAM_H will be chopped by TkInter
+        self.h1 = WALL_H * cam.viewRay.norm() / v1.norm()
+        self.h2 = WALL_H * cam.viewRay.norm() / v2.norm()
         screenV1 = v1 * (cam.viewRay.norm()**2 / cam.viewRay.dot(v1))
         screenV2 = v2 * (cam.viewRay.norm()**2 / cam.viewRay.dot(v2))
         self.x1 = screenV1.norm() * sign(screenV1 - cam.viewRay)
         self.x2 = screenV2.norm() * sign(screenV2 - cam.viewRay)
         
-
 
 class Intersection(object):
     # represents an intersection of a ray and a wall, which can be either 
@@ -900,12 +909,15 @@ class Camera(object):
     def rotate(self, angle):
         # angle in radians
         self.viewRay = self.viewRay.rotate(angle)
+        self.viewDir = Vector([viewRay.eye.x, viewRay.eye.y])
+        self.rightRay = self.rightRay.rotate(angle)
 
     def translate(self, vector):
         newX = self.viewRay.eye.x + vector.elements[0]
         newY = self.viewRay.eye.y + vector.elements[1]
         newEye = Point(newX, newY)
         self.viewRay = Ray(newEye, self.viewRay.target)
+        self.rightRay = Ray(newEye, self.rightRay.target)
         
 
 ################################################################################
@@ -1301,7 +1313,6 @@ class MazeGame(Animation):
         self.mode = "3D"
         super(MazeGame, self).__init__(width, height)
         self.root.resizable(width=0, height=0) # non-resizable
-        pass
 
 ######################
 ####### Model ########
@@ -1334,15 +1345,48 @@ class MazeGame(Animation):
 ######################
 
     def timerFired(self):
-        self.calculateVisibleSegs()
-        self.projectVisibleSegsToScreen()
+        firstPersonModes = ["3D", "3DG"]
+        topDownModes = ["2D"]
+        if (self.mode in firstPersonModes):
+            self.calculateVisibleSegs()
+            self.projectVisibleSegsToScreen()
         self.updateCamera()
+        self.isWin()
+        delay = 100 # ms
+        self.canvas.after(delay, self.timerFired)
 
     def calculateVisibleSegs(self):
-        pass
-
+        # check if each seg in visibleSegs is within 90 degrees
+        # of self.camera.viewRay
+        eye = self.camera.viewRay.eye
+        possibleSegs = self.maze.cullSegs(eye)
+        circularVisibleSegs = obstructSegs(eye, possibleSegs) # visible in 360
+        self.visibleSegs = set()
+        for seg in circularVisibleSegs:
+            ray1 = Ray(eye, seg.p1)
+            ray2 = Ray(eye, seg.p2)
+            angle1 = ray1.angle(camera.viewRay)
+            angle2 = ray2.angle(camera.viewRay)
+            if ((angle1 < math.pi/2) and (angle2 < math.pi/2)):
+                self.visibleSegs.add(seg)
+            elif ((angle1 >= math.pi/2) and (angle2 < math.pi/2)):
+                newSign = mathSign(self.camera.rightRay.dot(ray1))
+                newMagnitude = (CAM_WIDTH / self.camera.rightRay.norm())
+                newRay = self.camera.rightRay * newSign * newMagnitude
+                self.visibleSegs.add(Seg(seg.p2, newRay.target, seg.color))
+            elif ((angle1 < math.pi/2) and (angle2 >= math.pi/2)):
+                newSign = mathSign(self.camera.rightRay.dot(ray2))
+                newMagnitude = (CAM_WIDTH / self.camera.rightRay.norm())
+                newRay = self.camera.rightRay * newSign * newMagnitude
+                self.visibleSegs.add(Seg(seg.p1, newRay.target, seg.color))
+            else:
+                # seg is completely behind
+                continue
+                
     def projectVisibleSegsToScreen(self):
-        pass
+        self.screenSegs = set()
+        for seg in self.visibleSegs:
+            self.screenSegs.add(ScreenSeg(self.camera, seg))
 
     def updateCamera(self):
         self.camera.rotate(self.cameraRotVel)
@@ -1359,7 +1403,13 @@ class MazeGame(Animation):
                 return False
         return True
 
-
+    def isWin(self):
+        # if in last cell, game is won
+        lastX = self.maze.cols - 1
+        lastY = self.maze.rows - 1
+        if ((abs(camera.viewRay.eye.x - lastX) < 1) and
+            (abs(camera.viewRay.eye.y - lastY) < 1)):
+            self.isGameOver = True
 
     def mousePressed(self):
         pass
@@ -1461,18 +1511,6 @@ def init():
     canvas.maze = Maze(14,14)
     canvas.segs = set(canvas.maze.segs)
     canvas.v = (0,0)
-#    canvas.segs = set([Seg(Point(4,1),Point(4,5)),
-#                       Seg(Point(3,1),Point(3,3)),
-#                       #Seg(Point(4,1),Point(4,5)),
-#                       Seg(Point(2,3),Point(2,5)),
-#                       Seg(Point(2,6),Point(8,6)),
-#                       Seg(Point(4,7),Point(3,7)),
-#                       Seg(Point(3,4),Point(3,7)),
-#                       Seg(Point(8,1),Point(8,5)),
-#                       Seg(Point(4,5),Point(6,5)),
-#                       Seg(Point(7,3),Point(7,5)),
-#                       Seg(Point(6,2),Point(6,5)),
-#                       Seg(Point(1,4),Point(5,4))])
     
 def timerFired():
     canvas.eye = Point(canvas.eye.x + canvas.v[0], canvas.eye.y + canvas.v[1])
@@ -1491,7 +1529,6 @@ def redrawAll():
 #    for seg in segs:
 #        canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
     colors = ["red"]
-    canvas.maze.initCellsAsOne()
     possibleSegs = canvas.maze.cullSegs(eye)
     #possibleSegs = segs
     #print "########################################"
@@ -1500,14 +1537,14 @@ def redrawAll():
     #print "########################################"
     #print segs
     #print "########################################"
-#    for s in possibleSegs:
-#        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
-#                           fill=colors[0], width=3)
-    visible = obstructSegs(eye, possibleSegs)
-    #print "visible = ",visible
-    for s in visible:
+    for s in possibleSegs:
         canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
                            fill=colors[0], width=3)
+    visible = obstructSegs(eye, possibleSegs)
+    #print "visible = ",visible
+#    for s in visible:
+#        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
+#                           fill=colors[0], width=3)
 
 def keyPressed(event):
     if (event.keysym == "Up"):
@@ -1530,7 +1567,7 @@ def keyReleased(event):
 
 
 
-#run()
+run()
 
 
 
