@@ -15,7 +15,7 @@ CAM_H = 0.125
 CAM_WIDTH = 0.35
 WALL_H = 0.5
 CELL_SIZE = 40 # pixels
-DEBUG = True
+DEBUG = False
 
 ################################################################################
 ##### Point & Seg Helper Functions #############################################
@@ -31,11 +31,19 @@ def smallChance():
     choices.extend([False]*CYCLE_AMOUNT)
     return random.choice(choices)
 
-
 def withinEp(x, y):
     """Returns True if x and y are within some predefined epsilon: 0.001"""
     epsilon = 0.0001
     return abs(x-y) < epsilon
+
+def chopDomain(x):
+    """Chops number to fit within [1,1] for use with arccos"""
+    if (x > 1):
+        return 1
+    elif (x < -1):
+        return -1
+    else:
+        return x
 
 def isNumber(x):
     """Returns True if x in an int, long, or float; False otherwise"""
@@ -215,7 +223,8 @@ class Ray(object):
             assert(False), "angle not defined for non-rays"
         if (self.eye != other.eye):
             assert(False), "rays have different starting points"
-        angle = math.acos(self.dot(other) / float(self.norm() * other.norm()))
+        value = chopDomain(self.dot(other) /float(self.norm() * other.norm()))
+        angle = math.acos(value)
         return angle # radians
 
     def rotate(self, angle):
@@ -300,6 +309,9 @@ class Vector(Matrix):
     def __neg__(self):
         return Vector(map(lambda x: -x, self.elements))
 
+    def __str__(self):
+        return str(self.elements)
+
 class ScreenSeg(object):
     # keeps track of distance from center of screen and height
     def __init__(self, cam, seg):
@@ -309,13 +321,20 @@ class ScreenSeg(object):
         v1 = Ray(cam.viewRay.eye, seg.p1)
         v2 = Ray(cam.viewRay.eye, seg.p2)
         # h > CAM_H will be chopped by TkInter
+
         self.h1 = WALL_H * cam.viewRay.norm() / v1.norm()
         self.h2 = WALL_H * cam.viewRay.norm() / v2.norm()
+
+        #print cam.viewRay
+        #print (v1, v2)
+        #print (cam.viewRay.dot(v1), cam.viewRay.dot(v2))
         screenV1 = v1 * (cam.viewRay.norm()**2 / cam.viewRay.dot(v1))
         screenV2 = v2 * (cam.viewRay.norm()**2 / cam.viewRay.dot(v2))
         # TODO: FIX THIS!
-        self.x1 = screenV1.norm() * mathSign(screenV1 - cam.viewRay)
-        self.x2 = screenV2.norm() * mathSign(screenV2 - cam.viewRay)
+        self.x1 = screenV1.dot(cam.rightRay)
+        self.x2 = screenV2.dot(cam.rightRay)
+        #self.x1 = screenV1.norm() * (screenV1 - cam.viewRay)
+        #self.x2 = screenV2.norm() * (screenV2 - cam.viewRay)
         
 
 class Intersection(object):
@@ -905,7 +924,6 @@ class Camera(object):
         if (type(viewRay) != Ray):
             assert(False), "Camera requires Ray"
         self.viewRay = viewRay
-        self.viewDir = Vector([viewRay.eye.x, viewRay.eye.y])
         self.rightRay = viewRay.rotate(-math.pi/2)
         self.height = CAM_H
 
@@ -913,15 +931,20 @@ class Camera(object):
         # angle in radians
         viewRay = self.viewRay
         self.viewRay = self.viewRay.rotate(angle)
-        self.viewDir = Vector([viewRay.eye.x, viewRay.eye.y])
         self.rightRay = self.rightRay.rotate(angle)
 
     def translate(self, vector):
         newX = self.viewRay.eye.x + vector.elements[0]
         newY = self.viewRay.eye.y + vector.elements[1]
         newEye = Point(newX, newY)
-        self.viewRay = Ray(newEye, self.viewRay.target)
-        self.rightRay = Ray(newEye, self.rightRay.target)
+        newTargetX = self.viewRay.target.x + vector.elements[0]
+        newTargetY = self.viewRay.target.y + vector.elements[1]
+        newTarget = Point(newTargetX, newTargetY)
+        newRightX = self.rightRay.target.x + vector.elements[0]
+        newRightY = self.rightRay.target.y + vector.elements[1]
+        newRightTarget = Point(newRightX, newRightY)
+        self.viewRay = Ray(newEye, newTarget)
+        self.rightRay = Ray(newEye, newRightTarget)
         
 
 ################################################################################
@@ -1325,12 +1348,13 @@ class MazeGame(Animation):
 
     def init(self):
         self.isGameOver = False
+        self.isHelp = True
         self.initCamera()
         self.initMaze()
 
     def initCamera(self):
-        self.speed = 0.05
-        self.rotateSpeed = math.pi/8
+        self.speed = 0.08
+        self.rotateSpeed = math.pi/32
         self.cameraLength = 0.1
         # we start closest to (0,0)
         # facing in the x direction
@@ -1351,6 +1375,7 @@ class MazeGame(Animation):
 ######################
 
     def timerFired(self):
+        print self.mode
         firstPersonModes = ["3D", "3DG"]
         topDownModes = ["2D"]
         if (self.mode in firstPersonModes):
@@ -1388,12 +1413,17 @@ class MazeGame(Animation):
                 newSign = mathSign(self.camera.rightRay.dot(ray1))
                 newMagnitude = (CAM_WIDTH / self.camera.rightRay.norm())
                 newRay = self.camera.rightRay * newSign * newMagnitude
-                self.visibleSegs.add(Seg(seg.p2, newRay.target, seg.color))
+                newTarget = Point(newRay.target.x + self.camera.viewRay.dx,
+                                  newRay.target.y + self.camera.viewRay.dy)
+                shiftedRay = Ray(newRay.eye, newTarget)
+                self.visibleSegs.add(Seg(seg.p2, newTarget, seg.color))
             elif ((angle1 < math.pi/2) and (angle2 >= math.pi/2)):
                 newSign = mathSign(self.camera.rightRay.dot(ray2))
                 newMagnitude = (CAM_WIDTH / self.camera.rightRay.norm())
                 newRay = self.camera.rightRay * newSign * newMagnitude
-                self.visibleSegs.add(Seg(seg.p1, newRay.target, seg.color))
+                newTarget = Point(newRay.target.x + self.camera.viewRay.dx,
+                                  newRay.target.y + self.camera.viewRay.dy)
+                self.visibleSegs.add(Seg(seg.p1, newTarget, seg.color))
             else:
                 # seg is completely behind
                 continue
@@ -1442,8 +1472,11 @@ class MazeGame(Animation):
         if (event.keysym == "h"):
             # toggle help screen
             self.isHelp = not self.isHelp
-        elif (event.keysym == "1"):
-            self.mode == "2D"
+        if (event.keysym == "r"):
+            pass
+            # restart
+        if (event.keysym == "1"):
+            self.mode = "2D"
         elif (event.keysym == "2"):
             self.mode = "3D"
         elif (event.keysym == "3"):
@@ -1451,16 +1484,18 @@ class MazeGame(Animation):
 
 
     def firstPersonKeyPressed(self, event):
+        viewDir = Vector([self.camera.viewRay.dx, self.camera.viewRay.dy])
+        print viewDir
         if (event.keysym == "Up"):
-            self.cameraVel = self.speed * self.camera.viewDir
+            self.cameraVel = (self.speed/viewDir.norm()) * viewDir
         elif (event.keysym == "Down"):
-            self.cameraVel = - self.speed * self.camera.viewDir
+            self.cameraVel = (- self.speed/viewDir.norm()) * viewDir
         elif (event.keysym == "Right"):
             # clockwise
-            self.cameraRotVel = - self.rotateSpeed
+            self.cameraRotVel = self.rotateSpeed
         elif (event.keysym == "Left"):
             # counter-clockwise
-            self.cameraRotVel = self.rotateSpeed
+            self.cameraRotVel = - self.rotateSpeed
 
     def topDownKeyPressed(self, event):
         if (event.keysym == "Up"):
@@ -1511,10 +1546,40 @@ class MazeGame(Animation):
         self.canvas.create_text(cx, cy, text="You Win!",
                                 font="Helvetica 36 bold")
 
+    def drawHelp(self):
+        self.canvas.delete(ALL)
+        cx = self.width/2
+        leftcx = self.width/3
+        rightcx = (2*self.width)/3
+        cy = self.height/2
+        self.canvas.create_text(cx,cy/3,text="3D Maze!",
+                                font="Helvetica 28")
+        self.canvas.create_text(cx,cy/2,
+                                text="Find the exit (the black cell)",
+                                font="Helvetica 24")
+        self.canvas.create_text(leftcx, cy, text="""
+        To move
+        To switch to 2D mode
+                           3D mode
+                           3D with glasses
+        To toggle help
+        To restart""", font="Helvetica 18")
+        self.canvas.create_text(rightcx, cy, text="""
+        arrow keys
+        1
+        2
+        3
+        h
+        r""", font="Helvetica 18")
+
+        
+
 
     def redrawAll(self):
         self.canvas.delete(ALL)
-        if (self.isGameOver):
+        if (self.isHelp):
+            self.drawHelp()
+        elif (self.isGameOver):
             self.drawGameOver()
         elif (self.mode == "2D"):
             self.redraw2D()
@@ -1549,11 +1614,18 @@ class MazeGame(Animation):
 
     def draw2DEye(self, left, top):
         eye = self.camera.viewRay.eye
+        target = self.camera.viewRay.target
         leftEye = left + CELL_SIZE*eye.x - 1
         rightEye = left + CELL_SIZE*eye.x + 1
         topEye = top + CELL_SIZE*eye.y - 1
         botEye = top + CELL_SIZE*eye.y + 1
         self.canvas.create_oval(leftEye, topEye, rightEye, botEye)
+        leftTarget = left + CELL_SIZE*target.x - 1
+        rightTarget = left + CELL_SIZE*target.x + 1
+        topTarget = top + CELL_SIZE*target.y - 1
+        botTarget = top + CELL_SIZE*target.y + 1
+        self.canvas.create_oval(leftTarget, topTarget, rightTarget, botTarget,
+                                fill="blue")
 
     def redraw3D(self):
         pass
