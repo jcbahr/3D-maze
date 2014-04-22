@@ -11,7 +11,7 @@ import time
 #random.seed(41)
 
 CYCLE_AMOUNT = 5 # higher number -> fewer cycles
-CAM_H = 0.125
+CAM_H = 0.125 # 0.15?
 CAM_WIDTH = 0.015
 WALL_H = 0.5
 CELL_SIZE = 40 # pixels
@@ -87,11 +87,9 @@ def hexColor(red, green, blue):
 
 # color idea from Delancey Wu
 def makeColor(row, col, rows, cols):
-    if ((row == 0) and (col == 0)):
-        color = hexColor(255,255,255)
-    elif (((row == rows-1) and (col == cols-2)) or
+    if (((row == rows-1) and (col == cols-2)) or
           ((row == rows-2) and (col == cols-1))):
-        color = hexColor(0,0,0)
+        color = hexColor(255,255,255)
     else:
         green = 255*(row+col)/float(rows+cols)
         red = 32
@@ -1557,7 +1555,7 @@ class MazeGame(Animation):
         self.canvas.create_text(cx,cy/3,text="3D Maze!",
                                 font="Helvetica 28")
         self.canvas.create_text(cx,cy/2,
-                                text="Find the exit (the black cell)",
+                                text="Find the exit (the white cell)",
                                 font="Helvetica 24")
         self.canvas.create_text(leftcx, cy, text="""
         To move
@@ -1650,86 +1648,8 @@ class MazeGame(Animation):
         pass
 
 
-game = MazeGame(20, 20)
+game = MazeGame(5, 5)
 game.run()
-
-#def run():
-#    global canvas
-#    root = Tk()
-#    canvas = Canvas(root, width=700, height=700)
-#    canvas.pack()
-#    class Struct: pass
-#    canvas.data = Struct()
-#    init()
-#    root.bind("<KeyPress>", keyPressed)
-#    root.bind("<KeyRelease>", keyReleased)
-#    timerFired()
-#    root.mainloop()
-#
-#def init():
-#    canvas.data.counter = 1
-#    canvas.eye = Point(0.5,0.5)
-#    canvas.maze = Maze(14,14)
-#    canvas.segs = set(canvas.maze.segs)
-#    canvas.v = (0,0)
-#    
-#def timerFired():
-#    canvas.eye = Point(canvas.eye.x + canvas.v[0], canvas.eye.y + canvas.v[1])
-#    redrawAll()
-#    delay = 40 # ms
-#    canvas.data.counter += 1
-#    #print canvas.data.counter
-#    canvas.after(delay, timerFired)
-#
-## TODO: have 3D (with glasses), 3D (without), and top-down drawing modes
-#def redrawAll():
-#    canvas.delete(ALL)
-#    eye = canvas.eye
-#    segs = canvas.segs
-#    canvas.create_line(5+40*eye.x-1, 5+40*eye.y-1, 5+40*eye.x+1, 5+40*eye.y+1, fill="red", width=2)
-##    for seg in segs:
-##        canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
-#    colors = ["red"]
-#    possibleSegs = canvas.maze.cullSegs(eye)
-#    #possibleSegs = segs
-#    #print "########################################"
-#    #print "########################################"
-#    #print possibleSegs
-#    #print "########################################"
-#    #print segs
-#    #print "########################################"
-#    for s in possibleSegs:
-#        canvas.create_line(5+40*s.p1.x, 5+40*s.p1.y, 5+40*s.p2.x, 5+40*s.p2.y,
-#                           fill=colors[0], width=3)
-#    visible = obstructSegs(eye, possibleSegs)
-#    #print "visible = ",visible
-##    for s in visible:
-##        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
-##                           fill=colors[0], width=3)
-#
-#def keyPressed(event):
-#    if (event.keysym == "Up"):
-#        canvas.v = (0,-0.1)
-#    elif (event.keysym == "Down"):
-#        canvas.v = (0,0.1)
-#    elif (event.keysym == "Left"):
-#        canvas.v = (-0.1,0)
-#    elif (event.keysym == "Right"):
-#        canvas.v = (0.1,0)
-#    #redrawAll()
-#    #print """
-#    #########################################################
-#    ####EYE = """,canvas.eye,"""
-#    #########################################################"""
-#
-#def keyReleased(event):
-#    canvas.v = (0,0)
-#    #redrawAll()
-#
-
-
-#run()
-
 
 
 
