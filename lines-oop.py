@@ -8,12 +8,14 @@ import math
 from Tkinter import *
 import random
 import time
-random.seed(41)
+#random.seed(41)
 
 CYCLE_AMOUNT = 5 # higher number -> fewer cycles
 CAM_H = 0.125
 CAM_WIDTH = 0.35
 WALL_H = 0.5
+CELL_SIZE = 40 # pixels
+DEBUG = True
 
 ################################################################################
 ##### Point & Seg Helper Functions #############################################
@@ -167,8 +169,8 @@ class Seg(object):
 
 class Ray(object):
     def __init__(self, eye, target):
-        if (eye == target):
-            assert(False), "cannot make a ray from identical points"
+        #if (eye == target):
+        #    assert(False), "cannot make a ray from identical points"
         self.eye = eye
         self.dx = target.x - eye.x
         self.dy = target.y - eye.y
@@ -304,15 +306,16 @@ class ScreenSeg(object):
         # MUST be given a seg that is visible in the direction of the cam
         # seg pruning must be done beforehand!
         # follows is some linear algebra
-        v1 = Ray(cam.eye, seg.p1)
-        v2 = Ray(cam.eye, seg.p2)
+        v1 = Ray(cam.viewRay.eye, seg.p1)
+        v2 = Ray(cam.viewRay.eye, seg.p2)
         # h > CAM_H will be chopped by TkInter
         self.h1 = WALL_H * cam.viewRay.norm() / v1.norm()
         self.h2 = WALL_H * cam.viewRay.norm() / v2.norm()
         screenV1 = v1 * (cam.viewRay.norm()**2 / cam.viewRay.dot(v1))
         screenV2 = v2 * (cam.viewRay.norm()**2 / cam.viewRay.dot(v2))
-        self.x1 = screenV1.norm() * sign(screenV1 - cam.viewRay)
-        self.x2 = screenV2.norm() * sign(screenV2 - cam.viewRay)
+        # TODO: FIX THIS!
+        self.x1 = screenV1.norm() * mathSign(screenV1 - cam.viewRay)
+        self.x2 = screenV2.norm() * mathSign(screenV2 - cam.viewRay)
         
 
 class Intersection(object):
@@ -908,6 +911,7 @@ class Camera(object):
 
     def rotate(self, angle):
         # angle in radians
+        viewRay = self.viewRay
         self.viewRay = self.viewRay.rotate(angle)
         self.viewDir = Vector([viewRay.eye.x, viewRay.eye.y])
         self.rightRay = self.rightRay.rotate(angle)
@@ -937,7 +941,7 @@ class Maze(object):
         # more points than cells
         cRows = rows - 1
         cCols = cols - 1
-        self.cells = [[i+cRows*j for i in xrange(cRows)] for j in xrange(cCols)]
+        self.cells = [[i+cCols*j for i in xrange(cCols)] for j in xrange(cRows)]
 
     def initCellsAsOne(self):
         (rows, cols) = (self.rows, self.cols)
@@ -978,6 +982,7 @@ class Maze(object):
         (fromVal, toVal) = (max(cellVal1, cellVal2), min(cellVal1, cellVal2))
         for row in xrange(cRows):
             for col in xrange(cCols):
+                #print row, col, cRows, cCols
                 if (self.cells[row][col] == fromVal):
                     self.cells[row][col] = toVal
 
@@ -1310,7 +1315,7 @@ class MazeGame(Animation):
     def __init__(self, mazeRows, mazeCols, width=700, height=500):
         self.mazeRows = mazeRows
         self.mazeCols = mazeCols
-        self.mode = "3D"
+        self.mode = "2D"
         super(MazeGame, self).__init__(width, height)
         self.root.resizable(width=0, height=0) # non-resizable
 
@@ -1350,10 +1355,18 @@ class MazeGame(Animation):
         if (self.mode in firstPersonModes):
             self.calculateVisibleSegs()
             self.projectVisibleSegsToScreen()
+        elif (self.mode in topDownModes):
+            self.topDownVisibleSegs()
         self.updateCamera()
         self.isWin()
-        delay = 100 # ms
+        self.redrawAll()
+        delay = 40 # ms
         self.canvas.after(delay, self.timerFired)
+
+    def topDownVisibleSegs(self):
+        eye = self.camera.viewRay.eye
+        possibleSegs = self.maze.cullSegs(eye)
+        self.visibleSegs = obstructSegs(eye, possibleSegs)
 
     def calculateVisibleSegs(self):
         # check if each seg in visibleSegs is within 90 degrees
@@ -1362,6 +1375,7 @@ class MazeGame(Animation):
         possibleSegs = self.maze.cullSegs(eye)
         circularVisibleSegs = obstructSegs(eye, possibleSegs) # visible in 360
         self.visibleSegs = set()
+        camera = self.camera
         for seg in circularVisibleSegs:
             ray1 = Ray(eye, seg.p1)
             ray2 = Ray(eye, seg.p2)
@@ -1407,8 +1421,8 @@ class MazeGame(Animation):
         # if in last cell, game is won
         lastX = self.maze.cols - 1
         lastY = self.maze.rows - 1
-        if ((abs(camera.viewRay.eye.x - lastX) < 1) and
-            (abs(camera.viewRay.eye.y - lastY) < 1)):
+        if ((abs(self.camera.viewRay.eye.x - lastX) < 1) and
+            (abs(self.camera.viewRay.eye.y - lastY) < 1)):
             self.isGameOver = True
 
     def mousePressed(self):
@@ -1490,84 +1504,132 @@ class MazeGame(Animation):
 ######################
 
     def redrawAll(self):
+        self.canvas.delete(ALL)
+        if (self.mode == "2D"):
+            self.redraw2D()
+        elif (self.mode == "3D"):
+            self.redraw3D()
+        elif (self.mode == "3DG"):
+            self.redraw3DG()
+        else:
+            assert(False), "no valid mode"
+
+    def redraw2D(self):
+        eye = self.camera.viewRay.eye
+        segs = self.visibleSegs
+        cx = self.width/2
+        cy = self.height/2
+        left = cx - (CELL_SIZE*(self.mazeCols - 1))/2
+        top = cy - (CELL_SIZE*(self.mazeRows - 1))/2
+        self.draw2DEye(left, top)
+        for s in segs:
+            self.canvas.create_line(left + CELL_SIZE*s.p1.x,
+                                    top + CELL_SIZE*s.p1.y,
+                                    left + CELL_SIZE*s.p2.x,
+                                    top + CELL_SIZE*s.p2.y,
+                                    fill=s.color, width=2)
+        if (DEBUG):
+            for s in self.maze.segs:
+                self.canvas.create_line(left + CELL_SIZE*s.p1.x,
+                                        top + CELL_SIZE*s.p1.y,
+                                        left + CELL_SIZE*s.p2.x,
+                                        top + CELL_SIZE*s.p2.y,
+                                        fill="black", width=1)
+
+    def draw2DEye(self, left, top):
+        eye = self.camera.viewRay.eye
+        leftEye = left + CELL_SIZE*eye.x - 1
+        rightEye = left + CELL_SIZE*eye.x + 1
+        topEye = top + CELL_SIZE*eye.y - 1
+        botEye = top + CELL_SIZE*eye.y + 1
+        self.canvas.create_oval(leftEye, topEye, rightEye, botEye)
+
+    def redraw3D(self):
         pass
 
-def run():
-    global canvas
-    root = Tk()
-    canvas = Canvas(root, width=700, height=700)
-    canvas.pack()
-    class Struct: pass
-    canvas.data = Struct()
-    init()
-    root.bind("<KeyPress>", keyPressed)
-    root.bind("<KeyRelease>", keyReleased)
-    timerFired()
-    root.mainloop()
+    def redraw3DG(self):
+        pass
 
-def init():
-    canvas.data.counter = 1
-    canvas.eye = Point(0.5,0.5)
-    canvas.maze = Maze(14,14)
-    canvas.segs = set(canvas.maze.segs)
-    canvas.v = (0,0)
-    
-def timerFired():
-    canvas.eye = Point(canvas.eye.x + canvas.v[0], canvas.eye.y + canvas.v[1])
-    redrawAll()
-    delay = 40 # ms
-    canvas.data.counter += 1
-    #print canvas.data.counter
-    canvas.after(delay, timerFired)
 
-# TODO: have 3D (with glasses), 3D (without), and top-down drawing modes
-def redrawAll():
-    canvas.delete(ALL)
-    eye = canvas.eye
-    segs = canvas.segs
-    canvas.create_line(5+50*eye.x-1, 5+50*eye.y-1, 5+50*eye.x+1, 5+50*eye.y+1, fill="red", width=2)
-#    for seg in segs:
-#        canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
-    colors = ["red"]
-    possibleSegs = canvas.maze.cullSegs(eye)
-    #possibleSegs = segs
-    #print "########################################"
-    #print "########################################"
-    #print possibleSegs
-    #print "########################################"
-    #print segs
-    #print "########################################"
-    for s in possibleSegs:
-        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
-                           fill=colors[0], width=3)
-    visible = obstructSegs(eye, possibleSegs)
-    #print "visible = ",visible
-#    for s in visible:
-#        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
+game = MazeGame(6, 6)
+game.run()
+
+#def run():
+#    global canvas
+#    root = Tk()
+#    canvas = Canvas(root, width=700, height=700)
+#    canvas.pack()
+#    class Struct: pass
+#    canvas.data = Struct()
+#    init()
+#    root.bind("<KeyPress>", keyPressed)
+#    root.bind("<KeyRelease>", keyReleased)
+#    timerFired()
+#    root.mainloop()
+#
+#def init():
+#    canvas.data.counter = 1
+#    canvas.eye = Point(0.5,0.5)
+#    canvas.maze = Maze(14,14)
+#    canvas.segs = set(canvas.maze.segs)
+#    canvas.v = (0,0)
+#    
+#def timerFired():
+#    canvas.eye = Point(canvas.eye.x + canvas.v[0], canvas.eye.y + canvas.v[1])
+#    redrawAll()
+#    delay = 40 # ms
+#    canvas.data.counter += 1
+#    #print canvas.data.counter
+#    canvas.after(delay, timerFired)
+#
+## TODO: have 3D (with glasses), 3D (without), and top-down drawing modes
+#def redrawAll():
+#    canvas.delete(ALL)
+#    eye = canvas.eye
+#    segs = canvas.segs
+#    canvas.create_line(5+40*eye.x-1, 5+40*eye.y-1, 5+40*eye.x+1, 5+40*eye.y+1, fill="red", width=2)
+##    for seg in segs:
+##        canvas.create_line(5+50*seg.p1.x, 5+50*seg.p1.y, 5+50*seg.p2.x, 5+50*seg.p2.y)
+#    colors = ["red"]
+#    possibleSegs = canvas.maze.cullSegs(eye)
+#    #possibleSegs = segs
+#    #print "########################################"
+#    #print "########################################"
+#    #print possibleSegs
+#    #print "########################################"
+#    #print segs
+#    #print "########################################"
+#    for s in possibleSegs:
+#        canvas.create_line(5+40*s.p1.x, 5+40*s.p1.y, 5+40*s.p2.x, 5+40*s.p2.y,
 #                           fill=colors[0], width=3)
+#    visible = obstructSegs(eye, possibleSegs)
+#    #print "visible = ",visible
+##    for s in visible:
+##        canvas.create_line(5+50*s.p1.x, 5+50*s.p1.y, 5+50*s.p2.x, 5+50*s.p2.y,
+##                           fill=colors[0], width=3)
+#
+#def keyPressed(event):
+#    if (event.keysym == "Up"):
+#        canvas.v = (0,-0.1)
+#    elif (event.keysym == "Down"):
+#        canvas.v = (0,0.1)
+#    elif (event.keysym == "Left"):
+#        canvas.v = (-0.1,0)
+#    elif (event.keysym == "Right"):
+#        canvas.v = (0.1,0)
+#    #redrawAll()
+#    #print """
+#    #########################################################
+#    ####EYE = """,canvas.eye,"""
+#    #########################################################"""
+#
+#def keyReleased(event):
+#    canvas.v = (0,0)
+#    #redrawAll()
+#
 
-def keyPressed(event):
-    if (event.keysym == "Up"):
-        canvas.v = (0,-0.1)
-    elif (event.keysym == "Down"):
-        canvas.v = (0,0.1)
-    elif (event.keysym == "Left"):
-        canvas.v = (-0.1,0)
-    elif (event.keysym == "Right"):
-        canvas.v = (0.1,0)
-    #redrawAll()
-    #print """
-    #########################################################
-    ####EYE = """,canvas.eye,"""
-    #########################################################"""
 
-def keyReleased(event):
-    canvas.v = (0,0)
-    #redrawAll()
-
-
-
-run()
+#run()
 
 
 
