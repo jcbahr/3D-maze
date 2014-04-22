@@ -12,10 +12,11 @@ import time
 
 CYCLE_AMOUNT = 5 # higher number -> fewer cycles
 CAM_H = 0.125
-CAM_WIDTH = 0.35
+CAM_WIDTH = 0.015
 WALL_H = 0.5
 CELL_SIZE = 40 # pixels
 DEBUG = False
+LARGE = 99
 
 ################################################################################
 ##### Point & Seg Helper Functions #############################################
@@ -315,6 +316,7 @@ class Vector(Matrix):
 class ScreenSeg(object):
     # keeps track of distance from center of screen and height
     def __init__(self, cam, seg):
+        self.color = seg.color
         # MUST be given a seg that is visible in the direction of the cam
         # seg pruning must be done beforehand!
         # follows is some linear algebra
@@ -1379,7 +1381,7 @@ class MazeGame(Animation):
         firstPersonModes = ["3D", "3DG"]
         topDownModes = ["2D"]
         if (self.mode in firstPersonModes):
-            self.calculateVisibleSegs()
+            self.firstPersonVisibleSegs()
             self.projectVisibleSegsToScreen()
         elif (self.mode in topDownModes):
             self.topDownVisibleSegs()
@@ -1394,7 +1396,7 @@ class MazeGame(Animation):
         possibleSegs = self.maze.cullSegs(eye)
         self.visibleSegs = obstructSegs(eye, possibleSegs)
 
-    def calculateVisibleSegs(self):
+    def firstPersonVisibleSegs(self):
         # check if each seg in visibleSegs is within 90 degrees
         # of self.camera.viewRay
         eye = self.camera.viewRay.eye
@@ -1411,7 +1413,7 @@ class MazeGame(Animation):
                 self.visibleSegs.add(seg)
             elif ((angle1 >= math.pi/2) and (angle2 < math.pi/2)):
                 newSign = mathSign(self.camera.rightRay.dot(ray1))
-                newMagnitude = (CAM_WIDTH / self.camera.rightRay.norm())
+                newMagnitude = (LARGE*CAM_WIDTH / self.camera.rightRay.norm())
                 newRay = self.camera.rightRay * newSign * newMagnitude
                 newTarget = Point(newRay.target.x + self.camera.viewRay.dx,
                                   newRay.target.y + self.camera.viewRay.dy)
@@ -1419,7 +1421,7 @@ class MazeGame(Animation):
                 self.visibleSegs.add(Seg(seg.p2, newTarget, seg.color))
             elif ((angle1 < math.pi/2) and (angle2 >= math.pi/2)):
                 newSign = mathSign(self.camera.rightRay.dot(ray2))
-                newMagnitude = (CAM_WIDTH / self.camera.rightRay.norm())
+                newMagnitude = (LARGE*CAM_WIDTH / self.camera.rightRay.norm())
                 newRay = self.camera.rightRay * newSign * newMagnitude
                 newTarget = Point(newRay.target.x + self.camera.viewRay.dx,
                                   newRay.target.y + self.camera.viewRay.dy)
@@ -1492,10 +1494,10 @@ class MazeGame(Animation):
             self.cameraVel = (- self.speed/viewDir.norm()) * viewDir
         elif (event.keysym == "Right"):
             # clockwise
-            self.cameraRotVel = self.rotateSpeed
+            self.cameraRotVel = - self.rotateSpeed
         elif (event.keysym == "Left"):
             # counter-clockwise
-            self.cameraRotVel = - self.rotateSpeed
+            self.cameraRotVel = self.rotateSpeed
 
     def topDownKeyPressed(self, event):
         if (event.keysym == "Up"):
@@ -1628,13 +1630,27 @@ class MazeGame(Animation):
                                 fill="blue")
 
     def redraw3D(self):
-        pass
+        cx = self.width/2
+        cy = self.height/2
+        scaleX = (self.width / CAM_WIDTH)
+        scaleY = (self.height / CAM_H)
+        for s in self.screenSegs:
+            left = cx + s.x1*scaleX
+            right = cx + s.x2*scaleX
+            leftTop = cy + s.h1*scaleY
+            leftBot = cy - s.h1*scaleY
+            rightTop = cy + s.h2*scaleY
+            rightBot = cy - s.h2*scaleY
+            self.canvas.create_polygon(left, leftTop, right, rightTop,
+                                       right, rightBot, left, leftBot,
+                                       fill=s.color,
+                                       outline="black")
 
     def redraw3DG(self):
         pass
 
 
-game = MazeGame(6, 6)
+game = MazeGame(20, 20)
 game.run()
 
 #def run():
