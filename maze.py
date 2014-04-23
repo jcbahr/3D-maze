@@ -46,6 +46,12 @@ def chopDomain(x):
     else:
         return x
 
+def sec(x):
+    return 1 / math.cos(x)
+
+def csc(x):
+    return 1 / math.sin(x)
+
 def isNumber(x):
     """Returns True if x in an int, long, or float; False otherwise"""
     return type(x) in (int, long, float)
@@ -241,6 +247,10 @@ class Ray(object):
         ## we *ensure* the magnitude of the ray is constant under rotation
         #finalRay = newRay * (oldNorm / newNorm)
         return newRay
+
+    def angleWithX(self):
+        xAxis = Ray(self.eye, Point(self.eye.x + 1, self.eye.y))
+        return self.angle(xAxis)
         
 
 class Matrix(object):
@@ -320,21 +330,17 @@ class ScreenSeg(object):
         # follows is some linear algebra
         v1 = Ray(cam.viewRay.eye, seg.p1)
         v2 = Ray(cam.viewRay.eye, seg.p2)
-        # h > CAM_H will be chopped by TkInter
 
-        self.h1 = WALL_H * cam.viewRay.norm() / v1.norm()
-        self.h2 = WALL_H * cam.viewRay.norm() / v2.norm()
-
-        #print cam.viewRay
-        #print (v1, v2)
-        #print (cam.viewRay.dot(v1), cam.viewRay.dot(v2))
         screenV1 = v1 * (cam.viewRay.norm()**2 / cam.viewRay.dot(v1))
         screenV2 = v2 * (cam.viewRay.norm()**2 / cam.viewRay.dot(v2))
-        # TODO: FIX THIS!
+
         self.x1 = screenV1.dot(cam.rightRay)
         self.x2 = screenV2.dot(cam.rightRay)
-        #self.x1 = screenV1.norm() * (screenV1 - cam.viewRay)
-        #self.x2 = screenV2.norm() * (screenV2 - cam.viewRay)
+
+        self.h1 = WALL_H * screenV1.norm() / v1.norm()
+        self.h2 = WALL_H * screenV2.norm() / v2.norm()
+
+
         
 
 class Intersection(object):
@@ -1338,7 +1344,7 @@ class MazeGame(Animation):
     def __init__(self, mazeRows, mazeCols, width=700, height=500):
         self.mazeRows = mazeRows
         self.mazeCols = mazeCols
-        self.mode = "2D"
+        self.mode = "3D"
         super(MazeGame, self).__init__(width, height)
         self.root.resizable(width=0, height=0) # non-resizable
 
@@ -1391,41 +1397,103 @@ class MazeGame(Animation):
     def topDownVisibleSegs(self):
         eye = self.camera.viewRay.eye
         possibleSegs = self.maze.cullSegs(eye)
-        self.visibleSegs = obstructSegs(eye, possibleSegs)
+        self.circularVisibleSegs = obstructSegs(eye, possibleSegs)
 
     def firstPersonVisibleSegs(self):
         # check if each seg in visibleSegs is within 90 degrees
         # of self.camera.viewRay
         eye = self.camera.viewRay.eye
         possibleSegs = self.maze.cullSegs(eye)
-        circularVisibleSegs = obstructSegs(eye, possibleSegs) # visible in 360
+        self.circularVisibleSegs = obstructSegs(eye, possibleSegs) # visible in 360
         self.visibleSegs = set()
-        camera = self.camera
-        for seg in circularVisibleSegs:
+        cam = self.camera
+        for seg in self.circularVisibleSegs:
             ray1 = Ray(eye, seg.p1)
             ray2 = Ray(eye, seg.p2)
-            angle1 = ray1.angle(camera.viewRay)
-            angle2 = ray2.angle(camera.viewRay)
+            angle1 = ray1.angle(cam.viewRay)
+            angle2 = ray2.angle(cam.viewRay)
+            screenEye = cam.viewRay.target
+            screenDir = (cam.rightRay.dx, cam.rightRay.dy)
+            rightPoint = Point(screenEye.x+screenDir[0], screenEye.y+screenDir[1])
+            screenRay = Ray(screenEye, rightPoint)
             if ((angle1 < math.pi/2) and (angle2 < math.pi/2)):
                 self.visibleSegs.add(seg)
             elif ((angle1 >= math.pi/2) and (angle2 < math.pi/2)):
-                newSign = mathSign(self.camera.rightRay.dot(ray1))
-                newMagnitude = (LARGE*CAM_WIDTH / self.camera.rightRay.norm())
-                newRay = self.camera.rightRay * newSign * newMagnitude
-                newTarget = Point(newRay.target.x + self.camera.viewRay.dx,
-                                  newRay.target.y + self.camera.viewRay.dy)
-                shiftedRay = Ray(newRay.eye, newTarget)
-                self.visibleSegs.add(Seg(seg.p2, newTarget, seg.color))
+                newPoint = intersectRayAndRookSeg(screenRay, seg).point
+                self.visibleSegs.add(Seg(newPoint, seg.p2, seg.color))
+    #                newSign = mathSign(cam.rightRay.dot(ray1))
+    #                newMagnitude = (LARGE*CAM_WIDTH / cam.rightRay.norm())
+    #                newRay = cam.rightRay * newSign * newMagnitude
+    #                newTarget = Point(newRay.target.x + cam.viewRay.dx,
+    #                                  newRay.target.y + cam.viewRay.dy)
+    #                shiftedRay = Ray(newRay.eye, newTarget)
+    #                self.visibleSegs.add(Seg(seg.p2, newTarget, seg.color))
+#                if (seg.isHoriz):
+#                    self.horizOffScreenSeg(cam, seg, ray1, ray2)
+#                elif (seg.isVert):
+#                    self.vertOffScreenSeg(cam, seg, ray1, ray2)
+#                else:
+#                    assert(False), "neither horiz nor vert seg"
             elif ((angle1 < math.pi/2) and (angle2 >= math.pi/2)):
-                newSign = mathSign(self.camera.rightRay.dot(ray2))
-                newMagnitude = (LARGE*CAM_WIDTH / self.camera.rightRay.norm())
-                newRay = self.camera.rightRay * newSign * newMagnitude
-                newTarget = Point(newRay.target.x + self.camera.viewRay.dx,
-                                  newRay.target.y + self.camera.viewRay.dy)
-                self.visibleSegs.add(Seg(seg.p1, newTarget, seg.color))
+                newPoint = intersectRayAndRookSeg(screenRay, seg).point
+                self.visibleSegs.add(Seg(seg.p1, newPoint, seg.color))
+#                if (seg.isHoriz):
+#                    self.horizOffScreenSeg(cam, seg, ray2, ray1)
+#                elif (seg.isVert):
+#                    self.vertOffScreenSeg(cam, seg, ray2, ray1)
+#                else:
+#                    assert(False), "neither horiz nor vert seg"
+    #                newSign = mathSign(cam.rightRay.dot(ray2))
+    #                newMagnitude = (LARGE*CAM_WIDTH / cam.rightRay.norm())
+    #                newRay = cam.rightRay * newSign * newMagnitude
+    #                newTarget = Point(newRay.target.x + cam.viewRay.dx,
+    #                                  newRay.target.y + cam.viewRay.dy)
+    #                self.visibleSegs.add(Seg(seg.p1, newTarget, seg.color))
             else:
                 # seg is completely behind
                 continue
+
+    def horizOffScreenSeg(self, cam, seg, offRay, onRay):
+#        secScale = sec(cam.viewRay.angleWithX())
+#        dotScale = secScale * cam.rightRay.dot(offRay)
+#        totalScale = dotScale / (cam.rightRay.norm()**2)
+#        newY = seg.p1.y
+#        theta = - cam.viewRay.angleWithX()
+#        tempX = cam.viewRay.eye.x + math.tan(theta) * (newY - cam.viewRay.eye.y)
+#        newX = tempX + cam.viewRay.norm() * sec(theta)
+#        newPoint = Point(newX, newY)
+#        self.visibleSegs.add(Seg(newPoint, onRay.target, seg.color))
+
+
+
+
+        newSign = mathSign(cam.rightRay.dot(offRay))
+        newMagnitude = (LARGE*CAM_WIDTH / cam.rightRay.norm())
+        newRay = cam.rightRay * newSign * newMagnitude
+        newTarget = Point(newRay.target.x + cam.viewRay.dx,
+                          newRay.target.y + cam.viewRay.dy)
+        shiftedRay = Ray(newRay.eye, newTarget)
+        self.visibleSegs.add(Seg(seg.p2, newTarget, seg.color))
+
+    def vertOffScreenSeg(self, cam, seg, offRay, onRay):
+        cscScale = csc(cam.viewRay.angleWithX())
+        dotScale = cscScale * cam.rightRay.dot(offRay)
+        totalScale = dotScale / (cam.rightRay.norm()**2)
+        newX = seg.p1.x
+        theta = - cam.rightRay.angleWithX()
+        tempY = cam.viewRay.eye.y + math.tan(theta) * (newX - cam.viewRay.eye.x)
+        newY = tempY + cam.viewRay.norm() * sec(theta)
+        newPoint = Point(newX, newY)
+        self.visibleSegs.add(Seg(newPoint, onRay.target, seg.color))
+
+
+#        newSign = mathSign(cam.rightRay.dot(offRay))
+#        newMagnitude = (LARGE*CAM_WIDTH / cam.rightRay.norm())
+#        newRay = cam.rightRay * newSign * newMagnitude
+#        newTarget = Point(newRay.target.x + cam.viewRay.dx,
+#                          newRay.target.y + cam.viewRay.dy)
+#        shiftedRay = Ray(newRay.eye, newTarget)
+#        self.visibleSegs.add(Seg(seg.p2, newTarget, seg.color))
                 
     def projectVisibleSegsToScreen(self):
         self.screenSegs = set()
@@ -1442,7 +1510,7 @@ class MazeGame(Animation):
     def cameraIsLegal(self):
         # check that camera is no more than 1.5*self.cameraLength
         # from any wall
-        for seg in self.visibleSegs:
+        for seg in self.circularVisibleSegs:
             if (seg.withinDist(self.camera.viewRay.eye,1.5*self.cameraLength)):
                 return False
         return True
@@ -1455,7 +1523,7 @@ class MazeGame(Animation):
             (abs(self.camera.viewRay.eye.y - lastY) < 1)):
             self.isGameOver = True
 
-    def mousePressed(self):
+    def mousePressed(self, event):
         pass
 
     def keyPressed(self, event):
@@ -1590,7 +1658,7 @@ class MazeGame(Animation):
 
     def redraw2D(self):
         eye = self.camera.viewRay.eye
-        segs = self.visibleSegs
+        segs = self.circularVisibleSegs
         cx = self.width/2
         cy = self.height/2
         left = cx - (CELL_SIZE*(self.mazeCols - 1))/2
