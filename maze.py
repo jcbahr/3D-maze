@@ -8,15 +8,17 @@ import math
 from Tkinter import *
 import random
 import time
-#random.seed(41)
+random.seed(41)
 
 CYCLE_AMOUNT = 5 # higher number -> fewer cycles
-CAM_H = 0.125 # 0.15?
+CAM_HEIGHT = 0.125 # 0.15?
 CAM_WIDTH = 0.015
+CAM_LENGTH = 0.1
 WALL_H = 0.5
 CELL_SIZE = 40 # pixels
 DEBUG = False
 LARGE = 99
+FOV = math.pi/2
 
 ################################################################################
 ##### Point & Seg Helper Functions #############################################
@@ -33,7 +35,7 @@ def smallChance():
     return random.choice(choices)
 
 def withinEp(x, y):
-    """Returns True if x and y are within some predefined epsilon: 0.001"""
+    """Returns True if x and y are within some predefined epsilon: 0.0001"""
     epsilon = 0.0001
     return abs(x-y) < epsilon
 
@@ -91,7 +93,7 @@ def extremeY(pointSet):
 def hexColor(red, green, blue):
     return ("#%02x%02x%02x" % (red, green, blue))
 
-# color idea from Delancey Wu
+# color gradient idea from Delancey Wu
 def makeColor(row, col, rows, cols):
     if (((row == rows-1) and (col == cols-2)) or
           ((row == rows-2) and (col == cols-1))):
@@ -102,6 +104,18 @@ def makeColor(row, col, rows, cols):
         blue = 255*(rows+cols-row-col)/float(rows+cols)
         color = hexColor(red, green, blue)
     return color
+
+def shrinkScreenSeg(x, h, otherX, otherH):
+    if (abs(x) > abs(h)):
+        newX = 1.0*mathSign(x)
+        a = newX / x
+        newH = a*h + (1-a)*otherH
+    else:
+        newH = 1.0*mathSign(h)
+        a = newH / h
+        newX = a*x + (1-a)*otherX
+    return (newX, newH)
+
 
 
 ################################################################################
@@ -130,6 +144,11 @@ class Point(object):
     def __hash__(self):
         hashables = (self.x, self.y)
         return hash(hashables)
+
+    def dist(self, other):
+        dx = self.x - other.x
+        dy = self.y - other.y
+        return math.sqrt(dx**2 + dy**2)
 
 class Seg(object):
     def __init__(self, p1, p2, color=hexColor(0,0,0)):
@@ -339,6 +358,22 @@ class ScreenSeg(object):
 
         self.h1 = WALL_H * screenV1.norm() / v1.norm()
         self.h2 = WALL_H * screenV2.norm() / v2.norm()
+
+        self.shrink()
+
+    def __str__(self):
+        (x1,h1,x2,h2) = (self.x1,self.h1,self.x2,self.h2)
+        return str((x1,h1,x2,h2))
+
+    def shrink(self):
+        # required because tkinter cannot draw points too far from
+        # the visible portion of the canvas
+        # if abs(x),abs(h) < 1, it can be drawn
+        (x1, x2, h1, h2) = (self.x1, self.x2, self.h1, self.h2)
+        if ((abs(x1) > 1) or (abs(h1) > 1)):
+            (self.x1, self.h1) = shrinkScreenSeg(x1, h1, x2, h2)
+        if ((x2 > 1) or (h2 > 1)):
+            (self.x2, self.h2) = shrinkScreenSeg(x2, h2, x1, h1)
 
 
         
@@ -931,7 +966,7 @@ class Camera(object):
             assert(False), "Camera requires Ray"
         self.viewRay = viewRay
         self.rightRay = viewRay.rotate(-math.pi/2)
-        self.height = CAM_H
+        self.height = CAM_HEIGHT
 
     def rotate(self, angle):
         # angle in radians
@@ -1361,7 +1396,7 @@ class MazeGame(Animation):
     def initCamera(self):
         self.speed = 0.08
         self.rotateSpeed = math.pi/32
-        self.cameraLength = 0.1
+        self.cameraLength = CAM_LENGTH
         # we start closest to (0,0)
         # facing in the x direction
         startPoint = Point(0.5, 0.5)
@@ -1410,70 +1445,43 @@ class MazeGame(Animation):
         for seg in self.circularVisibleSegs:
             ray1 = Ray(eye, seg.p1)
             ray2 = Ray(eye, seg.p2)
-            angle1 = ray1.angle(cam.viewRay)
-            angle2 = ray2.angle(cam.viewRay)
+            angle1 = abs(ray1.angle(cam.viewRay))
+            angle2 = abs(ray2.angle(cam.viewRay))
             screenEye = cam.viewRay.target
             screenDir = (cam.rightRay.dx, cam.rightRay.dy)
             rightPoint = Point(screenEye.x+screenDir[0], screenEye.y+screenDir[1])
             screenRay = Ray(screenEye, rightPoint)
-            if ((angle1 < math.pi/2) and (angle2 < math.pi/2)):
+            viewRay = cam.viewRay
+            print "screenRay",screenRay
+            print "rightRay", cam.rightRay
+            if ((angle1 < FOV) and (angle2 < FOV)):
                 self.visibleSegs.add(seg)
-            elif ((angle1 >= math.pi/2) and (angle2 < math.pi/2)):
-                newPoint = intersectRayAndRookSeg(screenRay, seg).point
+            elif ((angle1 >= FOV) and (angle2 < FOV)):
+                print "ANGLE"
+                print angle1,angle2,  FOV
+                newIntersect = intersectRayAndRookSeg(screenRay, seg)
+                newPoint = newIntersect.point
                 self.visibleSegs.add(Seg(newPoint, seg.p2, seg.color))
-    #                newSign = mathSign(cam.rightRay.dot(ray1))
-    #                newMagnitude = (LARGE*CAM_WIDTH / cam.rightRay.norm())
-    #                newRay = cam.rightRay * newSign * newMagnitude
-    #                newTarget = Point(newRay.target.x + cam.viewRay.dx,
-    #                                  newRay.target.y + cam.viewRay.dy)
-    #                shiftedRay = Ray(newRay.eye, newTarget)
-    #                self.visibleSegs.add(Seg(seg.p2, newTarget, seg.color))
-#                if (seg.isHoriz):
-#                    self.horizOffScreenSeg(cam, seg, ray1, ray2)
-#                elif (seg.isVert):
-#                    self.vertOffScreenSeg(cam, seg, ray1, ray2)
-#                else:
-#                    assert(False), "neither horiz nor vert seg"
-            elif ((angle1 < math.pi/2) and (angle2 >= math.pi/2)):
-                newPoint = intersectRayAndRookSeg(screenRay, seg).point
+                print Seg(newPoint, seg.p2, seg.color), "from", seg
+            elif ((angle1 < FOV) and (angle2 >= FOV)):
+                newIntersect = intersectRayAndRookSeg(screenRay, seg)
+                newPoint = newIntersect.point
                 self.visibleSegs.add(Seg(seg.p1, newPoint, seg.color))
-#                if (seg.isHoriz):
-#                    self.horizOffScreenSeg(cam, seg, ray2, ray1)
-#                elif (seg.isVert):
-#                    self.vertOffScreenSeg(cam, seg, ray2, ray1)
-#                else:
-#                    assert(False), "neither horiz nor vert seg"
-    #                newSign = mathSign(cam.rightRay.dot(ray2))
-    #                newMagnitude = (LARGE*CAM_WIDTH / cam.rightRay.norm())
-    #                newRay = cam.rightRay * newSign * newMagnitude
-    #                newTarget = Point(newRay.target.x + cam.viewRay.dx,
-    #                                  newRay.target.y + cam.viewRay.dy)
-    #                self.visibleSegs.add(Seg(seg.p1, newTarget, seg.color))
+                print Seg(seg.p1, newPoint, seg.color), "from", seg
             else:
                 # seg is completely behind
                 continue
 
     def horizOffScreenSeg(self, cam, seg, offRay, onRay):
-#        secScale = sec(cam.viewRay.angleWithX())
-#        dotScale = secScale * cam.rightRay.dot(offRay)
-#        totalScale = dotScale / (cam.rightRay.norm()**2)
-#        newY = seg.p1.y
-#        theta = - cam.viewRay.angleWithX()
-#        tempX = cam.viewRay.eye.x + math.tan(theta) * (newY - cam.viewRay.eye.y)
-#        newX = tempX + cam.viewRay.norm() * sec(theta)
-#        newPoint = Point(newX, newY)
-#        self.visibleSegs.add(Seg(newPoint, onRay.target, seg.color))
-
-
-
-
-        newSign = mathSign(cam.rightRay.dot(offRay))
-        newMagnitude = (LARGE*CAM_WIDTH / cam.rightRay.norm())
-        newRay = cam.rightRay * newSign * newMagnitude
-        newTarget = Point(newRay.target.x + cam.viewRay.dx,
-                          newRay.target.y + cam.viewRay.dy)
-        shiftedRay = Ray(newRay.eye, newTarget)
-        self.visibleSegs.add(Seg(seg.p2, newTarget, seg.color))
+        secScale = sec(cam.viewRay.angleWithX())
+        dotScale = secScale * cam.rightRay.dot(offRay)
+        totalScale = dotScale / (cam.rightRay.norm()**2)
+        newY = seg.p1.y
+        theta = - cam.viewRay.angleWithX()
+        tempX = cam.viewRay.eye.x + math.tan(theta) * (newY - cam.viewRay.eye.y)
+        newX = tempX + cam.viewRay.norm() * sec(theta)
+        newPoint = Point(newX, newY)
+        self.visibleSegs.add(Seg(newPoint, onRay.target, seg.color))
 
     def vertOffScreenSeg(self, cam, seg, offRay, onRay):
         cscScale = csc(cam.viewRay.angleWithX())
@@ -1486,18 +1494,11 @@ class MazeGame(Animation):
         newPoint = Point(newX, newY)
         self.visibleSegs.add(Seg(newPoint, onRay.target, seg.color))
 
-
-#        newSign = mathSign(cam.rightRay.dot(offRay))
-#        newMagnitude = (LARGE*CAM_WIDTH / cam.rightRay.norm())
-#        newRay = cam.rightRay * newSign * newMagnitude
-#        newTarget = Point(newRay.target.x + cam.viewRay.dx,
-#                          newRay.target.y + cam.viewRay.dy)
-#        shiftedRay = Ray(newRay.eye, newTarget)
-#        self.visibleSegs.add(Seg(seg.p2, newTarget, seg.color))
                 
     def projectVisibleSegsToScreen(self):
         self.screenSegs = set()
         for seg in self.visibleSegs:
+            print "seg:", seg, "becomes", ScreenSeg(self.camera, seg)
             self.screenSegs.add(ScreenSeg(self.camera, seg))
 
     def updateCamera(self):
@@ -1562,6 +1563,41 @@ class MazeGame(Animation):
         elif (event.keysym == "Left"):
             # counter-clockwise
             self.cameraRotVel = - self.rotateSpeed
+        elif (event.keysym == "d"):
+            self.camera = Camera(Ray(Point(1.909,1.346),Point(2.01,1.356)))
+            print "\n\n"
+            print self.camera.viewRay
+            print "x1, h1, x2, h2"
+            for screenSeg in self.screenSegs:
+                #if ((abs(screenSeg.x2) > CAM_WIDTH) or (abs(screenSeg.x2) > CAM_WIDTH) or
+                #    (abs(screenSeg.h1) > CAM_HEIGHT) or (abs(screenSeg.h2) > CAM_HEIGHT)):
+                #    pass
+                #else:
+                cx = self.width/2
+                cy = self.height/2
+                sX = (self.width/CAM_WIDTH)
+                sY = (self.height/CAM_HEIGHT)
+                self.canvas.create_line(cx- sX*screenSeg.x1, cy-sY*screenSeg.h1, cx - sX*screenSeg.x2, cy-sY*screenSeg.h2,width=2)
+                print (cx- sX*screenSeg.x1, cy-sY*screenSeg.h1, cx - sX*screenSeg.x2, cy-sY*screenSeg.h2)
+                print (screenSeg.x1, screenSeg.h1, screenSeg.x2, screenSeg.h2)
+                print
+        x1 = -0.01
+        h1 = 0.5
+        x2 = .064
+        h2 = 0.898
+        scaleX = (self.width/CAM_WIDTH)
+        scaleY = (self.height/CAM_HEIGHT)
+        left = 350 - x1*scaleX
+        right = 350 - x2*scaleX
+        leftTop = 250 + h1*scaleY
+        leftBot = 250 - h1*scaleY
+        rightTop = 250 + h2*scaleY
+        rightBot = 250 - h2*scaleY
+        print "left, leftTop, right, rightTop, right, rightBot, left, leftBot", left, leftTop, right, rightTop, right, rightBot, left, leftBot
+        #self.canvas.create_polygon(left, leftTop, right, rightTop,
+        #                               right, rightBot, left, leftBot,
+        #                               fill="red",
+        #                               outline="black")
 
     def topDownKeyPressed(self, event):
         if (event.keysym == "Up"):
@@ -1693,11 +1729,28 @@ class MazeGame(Animation):
         self.canvas.create_oval(leftTarget, topTarget, rightTarget, botTarget,
                                 fill="blue")
 
+    def drawGround(self):
+        brown = hexColor(123, 112, 0)
+        cy = self.height/2
+        self.canvas.create_rectangle(0, cy, self.width, self.height,
+                                     fill=brown, width=0)
+
+
+
+    def drawSky(self):
+        #blue = hexColor(130,202,250) # light sky blue
+        blue = hexColor(112,172,255) # sky blue
+        cy = self.height/2
+        self.canvas.create_rectangle(0, 0, self.width, cy,
+                                     fill=blue, width=0)
+
     def redraw3D(self):
         cx = self.width/2
         cy = self.height/2
         scaleX = (self.width / CAM_WIDTH)
-        scaleY = (self.height / CAM_H)
+        scaleY = (self.height / CAM_HEIGHT)
+        self.drawGround()
+        self.drawSky()
         for s in self.screenSegs:
             left = cx - s.x1*scaleX
             right = cx - s.x2*scaleX
@@ -1714,7 +1767,7 @@ class MazeGame(Animation):
         pass
 
 
-game = MazeGame(10, 10)
+game = MazeGame(5, 5)
 game.run()
 
 
