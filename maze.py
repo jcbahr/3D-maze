@@ -1452,53 +1452,38 @@ class MazeGame(Animation):
             rightPoint = Point(screenEye.x+screenDir[0], screenEye.y+screenDir[1])
             screenRay = Ray(screenEye, rightPoint)
             viewRay = cam.viewRay
-            print "screenRay",screenRay
-            print "rightRay", cam.rightRay
+            #print "screenRay",screenRay
+            #print "rightRay", cam.rightRay
             if ((angle1 < FOV) and (angle2 < FOV)):
                 self.visibleSegs.add(seg)
             elif ((angle1 >= FOV) and (angle2 < FOV)):
-                print "ANGLE"
-                print angle1,angle2,  FOV
+            #    print "ANGLE"
+            #    print angle1,angle2,  FOV
                 newIntersect = intersectRayAndRookSeg(screenRay, seg)
                 newPoint = newIntersect.point
-                self.visibleSegs.add(Seg(newPoint, seg.p2, seg.color))
-                print Seg(newPoint, seg.p2, seg.color), "from", seg
+                # check for special case
+                if (0 < ray2.dot(viewRay)/viewRay.norm() < viewRay.norm()):
+                    continue
+                else:
+                    self.visibleSegs.add(Seg(newPoint, seg.p2, seg.color))
+            #        print Seg(newPoint, seg.p2, seg.color), "from", seg
             elif ((angle1 < FOV) and (angle2 >= FOV)):
                 newIntersect = intersectRayAndRookSeg(screenRay, seg)
                 newPoint = newIntersect.point
-                self.visibleSegs.add(Seg(seg.p1, newPoint, seg.color))
-                print Seg(seg.p1, newPoint, seg.color), "from", seg
+                # check for special case
+                if (0 < ray1.dot(viewRay)/viewRay.norm() < viewRay.norm()):
+                    continue
+                else:
+                    self.visibleSegs.add(Seg(seg.p1, newPoint, seg.color))
+            #        print Seg(seg.p1, newPoint, seg.color), "from", seg
             else:
                 # seg is completely behind
                 continue
-
-    def horizOffScreenSeg(self, cam, seg, offRay, onRay):
-        secScale = sec(cam.viewRay.angleWithX())
-        dotScale = secScale * cam.rightRay.dot(offRay)
-        totalScale = dotScale / (cam.rightRay.norm()**2)
-        newY = seg.p1.y
-        theta = - cam.viewRay.angleWithX()
-        tempX = cam.viewRay.eye.x + math.tan(theta) * (newY - cam.viewRay.eye.y)
-        newX = tempX + cam.viewRay.norm() * sec(theta)
-        newPoint = Point(newX, newY)
-        self.visibleSegs.add(Seg(newPoint, onRay.target, seg.color))
-
-    def vertOffScreenSeg(self, cam, seg, offRay, onRay):
-        cscScale = csc(cam.viewRay.angleWithX())
-        dotScale = cscScale * cam.rightRay.dot(offRay)
-        totalScale = dotScale / (cam.rightRay.norm()**2)
-        newX = seg.p1.x
-        theta = - cam.rightRay.angleWithX()
-        tempY = cam.viewRay.eye.y + math.tan(theta) * (newX - cam.viewRay.eye.x)
-        newY = tempY + cam.viewRay.norm() * sec(theta)
-        newPoint = Point(newX, newY)
-        self.visibleSegs.add(Seg(newPoint, onRay.target, seg.color))
-
                 
     def projectVisibleSegsToScreen(self):
         self.screenSegs = set()
         for seg in self.visibleSegs:
-            print "seg:", seg, "becomes", ScreenSeg(self.camera, seg)
+            #print "seg:", seg, "becomes", ScreenSeg(self.camera, seg)
             self.screenSegs.add(ScreenSeg(self.camera, seg))
 
     def updateCamera(self):
@@ -1565,9 +1550,9 @@ class MazeGame(Animation):
             self.cameraRotVel = - self.rotateSpeed
         elif (event.keysym == "d"):
             self.camera = Camera(Ray(Point(1.909,1.346),Point(2.01,1.356)))
-            print "\n\n"
-            print self.camera.viewRay
-            print "x1, h1, x2, h2"
+            #print "\n\n"
+            #print self.camera.viewRay
+            #print "x1, h1, x2, h2"
             for screenSeg in self.screenSegs:
                 #if ((abs(screenSeg.x2) > CAM_WIDTH) or (abs(screenSeg.x2) > CAM_WIDTH) or
                 #    (abs(screenSeg.h1) > CAM_HEIGHT) or (abs(screenSeg.h2) > CAM_HEIGHT)):
@@ -1578,9 +1563,9 @@ class MazeGame(Animation):
                 sX = (self.width/CAM_WIDTH)
                 sY = (self.height/CAM_HEIGHT)
                 self.canvas.create_line(cx- sX*screenSeg.x1, cy-sY*screenSeg.h1, cx - sX*screenSeg.x2, cy-sY*screenSeg.h2,width=2)
-                print (cx- sX*screenSeg.x1, cy-sY*screenSeg.h1, cx - sX*screenSeg.x2, cy-sY*screenSeg.h2)
-                print (screenSeg.x1, screenSeg.h1, screenSeg.x2, screenSeg.h2)
-                print
+                #print (cx- sX*screenSeg.x1, cy-sY*screenSeg.h1, cx - sX*screenSeg.x2, cy-sY*screenSeg.h2)
+                #print (screenSeg.x1, screenSeg.h1, screenSeg.x2, screenSeg.h2)
+                #print
         x1 = -0.01
         h1 = 0.5
         x2 = .064
@@ -1593,7 +1578,7 @@ class MazeGame(Animation):
         leftBot = 250 - h1*scaleY
         rightTop = 250 + h2*scaleY
         rightBot = 250 - h2*scaleY
-        print "left, leftTop, right, rightTop, right, rightBot, left, leftBot", left, leftTop, right, rightTop, right, rightBot, left, leftBot
+        #print "left, leftTop, right, rightTop, right, rightBot, left, leftBot", left, leftTop, right, rightTop, right, rightBot, left, leftBot
         #self.canvas.create_polygon(left, leftTop, right, rightTop,
         #                               right, rightBot, left, leftBot,
         #                               fill="red",
