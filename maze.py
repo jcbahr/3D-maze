@@ -8,12 +8,13 @@ import math
 from Tkinter import *
 import random
 import time
-random.seed(41)
+#random.seed(41)
 
 CYCLE_AMOUNT = 5 # higher number -> fewer cycles
 CAM_HEIGHT = 0.125 # 0.15?
 CAM_WIDTH = 0.015
 CAM_LENGTH = 0.1
+CAM_SEP = 0.02
 WALL_H = 0.5
 CELL_SIZE = 40 # pixels
 DEBUG = False
@@ -100,10 +101,32 @@ def makeColor(row, col, rows, cols):
         color = hexColor(255,255,255)
     else:
         green = 255*(row+col)/float(rows+cols)
-        red = 32
-        blue = 255*(rows+cols-row-col)/float(rows+cols)
+        red = 255*(row+col)/float(rows+cols)#255*(rows+cols-row-col)/float(rows+cols)
+        blue = 63
         color = hexColor(red, green, blue)
     return color
+
+def rgbFromHex(color):
+    # get RGB color from hex
+    red = int(color[1:3], 16)
+    green = int(color[3:5], 16)
+    blue = int(color[5:], 16)
+    return (red, green, blue)
+
+def rightChannelColor(color):
+    # red-tint color for left channel of
+    # red-cyan anaglyph
+    (red, green, blue) = rgbFromHex(color)
+    green = green * (2./3)
+    blue = blue * (2./3)
+    return hexColor(red, green, blue)
+
+def leftChannelColor(color):
+    # cyan-tint color for right channel of
+    # red-cyan anaglyph
+    (red, green, blue) = rgbFromHex(color)
+    red = red * (2./3)
+    return hexColor(red, green, blue)
 
 def shrinkScreenSeg(x, h, otherX, otherH):
     if (abs(x) > abs(h)):
@@ -1390,19 +1413,29 @@ class MazeGame(Animation):
     def init(self):
         self.isGameOver = False
         self.isHelp = True
-        self.initCamera()
         self.initMaze()
+        self.initCamera()
 
     def initCamera(self):
         self.speed = 0.08
         self.rotateSpeed = math.pi/32
         self.cameraLength = CAM_LENGTH
+        self.cameraSep = CAM_SEP
         # we start closest to (0,0)
         # facing in the x direction
+        # check if facing wall
         startPoint = Point(0.5, 0.5)
-        viewPoint = Point(0.5 + self.cameraLength, 0.5)
+        if (Seg(Point(0,1),Point(1,1)) in self.maze.segs):
+            secondCamStart = Point(0.5, 0.5 - self.cameraSep)
+            secondCamView = Point(0.5 + self.cameraLength, 0.5 - self.cameraSep)
+            viewPoint = Point(0.5 + self.cameraLength, 0.5)
+        else:
+            secondCamStart = Point(0.5 + self.cameraSep, 0.5)
+            secondCamView = Point(0.5 + self.cameraSep, 0.5 + self.cameraLength)
+            viewPoint = Point(0.5, 0.5 + self.cameraLength)
         self.camera = Camera(Ray(startPoint, viewPoint))
-        self.cameraVel = Vector([0,0])
+        self.secondCamera = Camera(Ray(secondCamStart, secondCamView))
+        self.cameraVel = 0
         self.cameraRotVel = 0
 
     def initMaze(self):
@@ -1416,12 +1449,12 @@ class MazeGame(Animation):
 ######################
 
     def timerFired(self):
-        firstPersonModes = ["3D", "3DG"]
-        topDownModes = ["2D"]
-        if (self.mode in firstPersonModes):
+        if (self.mode == "3D"):
             self.firstPersonVisibleSegs()
             self.projectVisibleSegsToScreen()
-        elif (self.mode in topDownModes):
+        elif (self.mode == "3DG"):
+            pass
+        elif (self.mode == "2D"):
             self.topDownVisibleSegs()
         self.updateCamera()
         self.isWin()
@@ -1487,17 +1520,48 @@ class MazeGame(Animation):
             self.screenSegs.add(ScreenSeg(self.camera, seg))
 
     def updateCamera(self):
+        topDownModes = ["2D"]
+        firstPersonModes = ["3D", "3DG"]
+        if (self.mode in topDownModes):
+            self.topDownUpdateCamera()
+        elif (self.mode in firstPersonModes):
+            self.firstPersonUpdateCamera()
+        else:
+            assert(False), "Not a valid mode"
+
+
+    def topDownUpdateCamera(self):
         self.camera.rotate(self.cameraRotVel)
+        self.secondCamera.rotate(self.cameraRotVel)
         self.camera.translate(self.cameraVel)
+        self.secondCamera.translate(self.cameraVel)
         if not self.cameraIsLegal():
             # move back!
             self.camera.translate(- self.cameraVel)
+            self.secondCamera.translate(- self.cameraVel)
+
+
+    def firstPersonUpdateCamera(self):
+        viewDir = Vector([self.camera.viewRay.dx, self.camera.viewRay.dy])
+        velocity = (self.cameraVel/viewDir.norm()) * viewDir
+        self.camera.rotate(self.cameraRotVel)
+        self.secondCamera.rotate(self.cameraRotVel)
+        self.camera.translate(velocity)
+        self.secondCamera.translate(velocity)
+        if not self.cameraIsLegal():
+            # move back!
+            self.camera.translate(- velocity)
+            self.secondCamera.translate(- velocity)
+
 
     def cameraIsLegal(self):
         # check that camera is no more than 1.5*self.cameraLength
         # from any wall
+        cam1 = self.camera
+        cam2 = self.secondCamera
         for seg in self.circularVisibleSegs:
-            if (seg.withinDist(self.camera.viewRay.eye,1.5*self.cameraLength)):
+            if (seg.withinDist(cam1.viewRay.eye,1.4*self.cameraLength) or
+                (seg.withinDist(cam2.viewRay.eye, 1.4*self.cameraLength))):
                 return False
         return True
 
@@ -1513,6 +1577,7 @@ class MazeGame(Animation):
         pass
 
     def keyPressed(self, event):
+        self.isHelp = False
         arrows = ["Up", "Down", "Left", "Right"]
         firstPersonModes = ["3D", "3DG"]
         topDownModes = ["2D"]
@@ -1526,22 +1591,26 @@ class MazeGame(Animation):
             # toggle help screen
             self.isHelp = not self.isHelp
         if (event.keysym == "r"):
-            pass
+            self.init()
+            self.isHelp = False
             # restart
         if (event.keysym == "1"):
             self.mode = "2D"
+            self.cameraVel = Vector([0,0])
         elif (event.keysym == "2"):
             self.mode = "3D"
+            self.cameraVel = 0
         elif (event.keysym == "3"):
             self.mode = "3DG"
+            self.cameraVel = 0
 
 
     def firstPersonKeyPressed(self, event):
         viewDir = Vector([self.camera.viewRay.dx, self.camera.viewRay.dy])
         if (event.keysym == "Up"):
-            self.cameraVel = (self.speed/viewDir.norm()) * viewDir
+            self.cameraVel = self.speed 
         elif (event.keysym == "Down"):
-            self.cameraVel = (- self.speed/viewDir.norm()) * viewDir
+            self.cameraVel = -self.speed
         elif (event.keysym == "Right"):
             # clockwise
             self.cameraRotVel = self.rotateSpeed
@@ -1550,39 +1619,12 @@ class MazeGame(Animation):
             self.cameraRotVel = - self.rotateSpeed
         elif (event.keysym == "d"):
             self.camera = Camera(Ray(Point(1.909,1.346),Point(2.01,1.356)))
-            #print "\n\n"
-            #print self.camera.viewRay
-            #print "x1, h1, x2, h2"
             for screenSeg in self.screenSegs:
-                #if ((abs(screenSeg.x2) > CAM_WIDTH) or (abs(screenSeg.x2) > CAM_WIDTH) or
-                #    (abs(screenSeg.h1) > CAM_HEIGHT) or (abs(screenSeg.h2) > CAM_HEIGHT)):
-                #    pass
-                #else:
                 cx = self.width/2
                 cy = self.height/2
                 sX = (self.width/CAM_WIDTH)
                 sY = (self.height/CAM_HEIGHT)
                 self.canvas.create_line(cx- sX*screenSeg.x1, cy-sY*screenSeg.h1, cx - sX*screenSeg.x2, cy-sY*screenSeg.h2,width=2)
-                #print (cx- sX*screenSeg.x1, cy-sY*screenSeg.h1, cx - sX*screenSeg.x2, cy-sY*screenSeg.h2)
-                #print (screenSeg.x1, screenSeg.h1, screenSeg.x2, screenSeg.h2)
-                #print
-        x1 = -0.01
-        h1 = 0.5
-        x2 = .064
-        h2 = 0.898
-        scaleX = (self.width/CAM_WIDTH)
-        scaleY = (self.height/CAM_HEIGHT)
-        left = 350 - x1*scaleX
-        right = 350 - x2*scaleX
-        leftTop = 250 + h1*scaleY
-        leftBot = 250 - h1*scaleY
-        rightTop = 250 + h2*scaleY
-        rightBot = 250 - h2*scaleY
-        #print "left, leftTop, right, rightTop, right, rightBot, left, leftBot", left, leftTop, right, rightTop, right, rightBot, left, leftBot
-        #self.canvas.create_polygon(left, leftTop, right, rightTop,
-        #                               right, rightBot, left, leftBot,
-        #                               fill="red",
-        #                               outline="black")
 
     def topDownKeyPressed(self, event):
         if (event.keysym == "Up"):
@@ -1612,7 +1654,7 @@ class MazeGame(Animation):
         translations = ["Up", "Down"]
         rotations = ["Left", "Right"]
         if (event.keysym in translations):
-           self.cameraVel = Vector([0,0])
+           self.cameraVel = 0
         elif (event.keysym in rotations):
             self.cameraRotVel = 0
 
@@ -1627,14 +1669,14 @@ class MazeGame(Animation):
 ######################
 
     def drawGameOver(self):
-        self.canvas.delete(ALL)
+        #self.canvas.delete(ALL)
         cx = self.width/2
         cy = self.height/2
         self.canvas.create_text(cx, cy, text="You Win!",
                                 font="Helvetica 36 bold")
 
     def drawHelp(self):
-        self.canvas.delete(ALL)
+        #self.canvas.delete(ALL)
         cx = self.width/2
         leftcx = self.width/3
         rightcx = (2*self.width)/3
@@ -1664,11 +1706,7 @@ class MazeGame(Animation):
 
     def redrawAll(self):
         self.canvas.delete(ALL)
-        if (self.isHelp):
-            self.drawHelp()
-        elif (self.isGameOver):
-            self.drawGameOver()
-        elif (self.mode == "2D"):
+        if (self.mode == "2D"):
             self.redraw2D()
         elif (self.mode == "3D"):
             self.redraw3D()
@@ -1676,6 +1714,10 @@ class MazeGame(Animation):
             self.redraw3DG()
         else:
             assert(False), "no valid mode"
+        if (self.isHelp):
+            self.drawHelp()
+        elif (self.isGameOver):
+            self.drawGameOver()
 
     def redraw2D(self):
         eye = self.camera.viewRay.eye
@@ -1715,7 +1757,8 @@ class MazeGame(Animation):
                                 fill="blue")
 
     def drawGround(self):
-        brown = hexColor(123, 112, 0)
+        #brown = hexColor(123, 112, 0)
+        brown = hexColor(163, 130, 41) # better for red/cyan anaglyph
         cy = self.height/2
         self.canvas.create_rectangle(0, cy, self.width, self.height,
                                      fill=brown, width=0)
@@ -1724,7 +1767,8 @@ class MazeGame(Animation):
 
     def drawSky(self):
         #blue = hexColor(130,202,250) # light sky blue
-        blue = hexColor(112,172,255) # sky blue
+        #blue = hexColor(112,172,255) # sky blue
+        blue = hexColor(160,191,235) # better for red/cyan anaglyph
         cy = self.height/2
         self.canvas.create_rectangle(0, 0, self.width, cy,
                                      fill=blue, width=0)
@@ -1752,7 +1796,7 @@ class MazeGame(Animation):
         pass
 
 
-game = MazeGame(10)
+game = MazeGame(14)
 game.run()
 
 
