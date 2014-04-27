@@ -14,7 +14,7 @@ CYCLE_AMOUNT = 5 # higher number -> fewer cycles
 CAM_HEIGHT = 0.125 # 0.15?
 CAM_WIDTH = 0.015
 CAM_LENGTH = 0.1
-CAM_SEP = 0.02
+CAM_SEP = 0.06
 WALL_H = 0.5
 CELL_SIZE = 40 # pixels
 DEBUG = False
@@ -116,17 +116,18 @@ def rgbFromHex(color):
 def rightChannelColor(color):
     # red-tint color for left channel of
     # red-cyan anaglyph
-    (red, green, blue) = rgbFromHex(color)
-    green = green * (2./3)
-    blue = blue * (2./3)
-    return hexColor(red, green, blue)
+#    (red, green, blue) = rgbFromHex(color)
+#    gray = (red+green+blue)/3
+#    newGray = min(255, gray*2)
+    return hexColor(255, 50, 30)
 
 def leftChannelColor(color):
     # cyan-tint color for right channel of
     # red-cyan anaglyph
-    (red, green, blue) = rgbFromHex(color)
-    red = red * (2./3)
-    return hexColor(red, green, blue)
+#    (red, green, blue) = rgbFromHex(color)
+#    gray = (red+green+blue)/2
+#    newGray = min(255, gray*2)
+    return hexColor(05, 250, 245)
 
 def shrinkScreenSeg(x, h, otherX, otherH):
     if (abs(x) > abs(h)):
@@ -1450,10 +1451,31 @@ class MazeGame(Animation):
 
     def timerFired(self):
         if (self.mode == "3D"):
-            self.firstPersonVisibleSegs()
-            self.projectVisibleSegsToScreen()
+            self.screenSegs = set()
+            self.visibleSegs = set()
+            self.circularVisibleSegs = set()
+            (self.visibleSegs,
+             self.circularVisibleSegs) = self.firstPersonVisibleSegs(self.camera)
+            self.projectVisibleSegsToScreen(self.camera,
+                                            self.screenSegs,
+                                            self.visibleSegs)
         elif (self.mode == "3DG"):
-            pass
+            self.screenSegs = set()
+            self.secScreenSegs = set()
+            self.visibleSegs = set()
+            self.secVisibleSegs = set()
+            self.circularVisibleSegs = set()
+            self.secCircularVisibleSegs = set()
+            (self.visibleSegs, self.circularVisibleSegs) = \
+                                        self.firstPersonVisibleSegs(self.camera)
+            (self.secVisibleSegs, self.secCircularVisibleSegs) = \
+                    self.firstPersonVisibleSegs(self.secondCamera)
+            self.projectVisibleSegsToScreen(self.camera,
+                                            self.screenSegs,
+                                            self.visibleSegs)
+            self.projectVisibleSegsToScreen(self.secondCamera,
+                                            self.secScreenSegs,
+                                            self.secVisibleSegs)
         elif (self.mode == "2D"):
             self.topDownVisibleSegs()
         self.updateCamera()
@@ -1467,15 +1489,17 @@ class MazeGame(Animation):
         possibleSegs = self.maze.cullSegs(eye)
         self.circularVisibleSegs = obstructSegs(eye, possibleSegs)
 
-    def firstPersonVisibleSegs(self):
-        # check if each seg in visibleSegs is within 90 degrees
-        # of self.camera.viewRay
-        eye = self.camera.viewRay.eye
+    def firstPersonVisibleSegs(self, cam):
+        # check if each seg in visibleSegs is within 90 degrees of cam.viewRay
+        # given visSegs to store visibleSegs and circSegs to store
+        # circularly visible segs
+        visSegs = set()
+        circSegs = set()
+        eye = cam.viewRay.eye
         possibleSegs = self.maze.cullSegs(eye)
-        self.circularVisibleSegs = obstructSegs(eye, possibleSegs) # visible in 360
-        self.visibleSegs = set()
-        cam = self.camera
-        for seg in self.circularVisibleSegs:
+        circSegs = obstructSegs(eye, possibleSegs) # visible in 360
+        visSegs = set()
+        for seg in circSegs:
             ray1 = Ray(eye, seg.p1)
             ray2 = Ray(eye, seg.p2)
             angle1 = abs(ray1.angle(cam.viewRay))
@@ -1485,21 +1509,16 @@ class MazeGame(Animation):
             rightPoint = Point(screenEye.x+screenDir[0], screenEye.y+screenDir[1])
             screenRay = Ray(screenEye, rightPoint)
             viewRay = cam.viewRay
-            #print "screenRay",screenRay
-            #print "rightRay", cam.rightRay
             if ((angle1 < FOV) and (angle2 < FOV)):
-                self.visibleSegs.add(seg)
+                visSegs.add(seg)
             elif ((angle1 >= FOV) and (angle2 < FOV)):
-            #    print "ANGLE"
-            #    print angle1,angle2,  FOV
                 newIntersect = intersectRayAndRookSeg(screenRay, seg)
                 newPoint = newIntersect.point
                 # check for special case
                 if (0 < ray2.dot(viewRay)/viewRay.norm() < viewRay.norm()):
                     continue
                 else:
-                    self.visibleSegs.add(Seg(newPoint, seg.p2, seg.color))
-            #        print Seg(newPoint, seg.p2, seg.color), "from", seg
+                    visSegs.add(Seg(newPoint, seg.p2, seg.color))
             elif ((angle1 < FOV) and (angle2 >= FOV)):
                 newIntersect = intersectRayAndRookSeg(screenRay, seg)
                 newPoint = newIntersect.point
@@ -1507,17 +1526,15 @@ class MazeGame(Animation):
                 if (0 < ray1.dot(viewRay)/viewRay.norm() < viewRay.norm()):
                     continue
                 else:
-                    self.visibleSegs.add(Seg(seg.p1, newPoint, seg.color))
-            #        print Seg(seg.p1, newPoint, seg.color), "from", seg
+                    visSegs.add(Seg(seg.p1, newPoint, seg.color))
             else:
                 # seg is completely behind
                 continue
+        return (visSegs, circSegs)
                 
-    def projectVisibleSegsToScreen(self):
-        self.screenSegs = set()
-        for seg in self.visibleSegs:
-            #print "seg:", seg, "becomes", ScreenSeg(self.camera, seg)
-            self.screenSegs.add(ScreenSeg(self.camera, seg))
+    def projectVisibleSegsToScreen(self, cam, screenSegs, visSegs):
+        for seg in visSegs:
+            screenSegs.add(ScreenSeg(cam, seg))
 
     def updateCamera(self):
         topDownModes = ["2D"]
@@ -1756,13 +1773,17 @@ class MazeGame(Animation):
         self.canvas.create_oval(leftTarget, topTarget, rightTarget, botTarget,
                                 fill="blue")
 
+    def drawBackground(self):
+        background = hexColor(255,255,255) # better for red/cyan anaglyph
+        self.canvas.create_rectangle(0, 0, self.width, self.height,
+                                     fill=background, width=0)
+
     def drawGround(self):
         #brown = hexColor(123, 112, 0)
         brown = hexColor(163, 130, 41) # better for red/cyan anaglyph
         cy = self.height/2
         self.canvas.create_rectangle(0, cy, self.width, self.height,
                                      fill=brown, width=0)
-
 
 
     def drawSky(self):
@@ -1792,9 +1813,44 @@ class MazeGame(Animation):
                                        fill=s.color,
                                        outline="black")
 
-    def redraw3DG(self):
-        pass
+    def draw3DGChannel(self, channel):
+        cx = self.width/2
+        cy = self.height/2
+        scaleX = (self.width / CAM_WIDTH)
+        scaleY = (self.height / CAM_HEIGHT)
+        if (channel == "right"):
+            screenSegs = self.screenSegs
+            shift = "0,0"
+            otherShift = "0,1"
+        else:
+            screenSegs = self.secScreenSegs
+            shift = "0,1"
+            otherShift = "0,0"
+        for s in screenSegs:
+            left = cx - s.x1*scaleX
+            right = cx - s.x2*scaleX
+            leftTop = cy + s.h1*scaleY
+            leftBot = cy - s.h1*scaleY
+            rightTop = cy + s.h2*scaleY
+            rightBot = cy - s.h2*scaleY
+            if (channel == "right"):
+                color = rightChannelColor(s.color)
+            else:
+                color = leftChannelColor(s.color)
+            self.canvas.create_polygon(left, leftTop, right, rightTop,
+                                       right, rightBot, left, leftBot,
+                                       fill=color,
+                                       outline=color,
+                                       outlinestipple="gray50",
+                                       outlineoffset=shift,
+                                       stipple="gray50",
+                                       offset=shift,
+                                       width=0)
 
+    def redraw3DG(self):
+        self.drawBackground()
+        self.draw3DGChannel("left")
+        self.draw3DGChannel("right")
 
 game = MazeGame(14)
 game.run()
