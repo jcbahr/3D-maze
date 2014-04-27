@@ -1376,9 +1376,9 @@ class Animation(object):
 
 # TODO: Move animation functions into MazeGame class
 class MazeGame(Animation):
-    def __init__(self, mazeRows, mazeCols, width=700, height=500):
-        self.mazeRows = mazeRows
-        self.mazeCols = mazeCols
+    def __init__(self, mazeSize, width=700, height=500):
+        self.mazeRows = mazeSize
+        self.mazeCols = mazeSize
         self.mode = "3D"
         super(MazeGame, self).__init__(width, height)
         self.root.resizable(width=0, height=0) # non-resizable
@@ -1752,7 +1752,7 @@ class MazeGame(Animation):
         pass
 
 
-game = MazeGame(5, 5)
+game = MazeGame(10)
 game.run()
 
 
