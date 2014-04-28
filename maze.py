@@ -1439,6 +1439,7 @@ class MazeGame(Animation):
         self.camera = Camera(Ray(startPoint, viewPoint))
         self.secondCamera = Camera(Ray(secondCamStart, secondCamView))
         self.cameraVel = 0
+        self.sideCameraVel = 0
         self.cameraRotVel = 0
 
     def initMaze(self):
@@ -1562,15 +1563,21 @@ class MazeGame(Animation):
 
     def firstPersonUpdateCamera(self):
         viewDir = Vector([self.camera.viewRay.dx, self.camera.viewRay.dy])
+        rightDir = Vector([self.camera.rightRay.dx, self.camera.rightRay.dy])
         velocity = (self.cameraVel/viewDir.norm()) * viewDir
+        sideVel = (self.sideCameraVel/rightDir.norm()) * rightDir
+        newVel = (velocity + sideVel)
+        if (newVel.norm() != 0):
+            oldNorm = max(velocity.norm(), sideVel.norm())
+            newVel = newVel * (oldNorm/newVel.norm())
         self.camera.rotate(self.cameraRotVel)
         self.secondCamera.rotate(self.cameraRotVel)
-        self.camera.translate(velocity)
-        self.secondCamera.translate(velocity)
+        self.camera.translate(newVel)
+        self.secondCamera.translate(newVel)
         if not self.cameraIsLegal():
             # move back!
-            self.camera.translate(- velocity)
-            self.secondCamera.translate(- velocity)
+            self.camera.translate(- newVel)
+            self.secondCamera.translate(- newVel)
 
 
     def cameraIsLegal(self):
@@ -1597,7 +1604,6 @@ class MazeGame(Animation):
 
     def keyPressed(self, event):
         self.isHelp = False
-        arrows = ["Up", "Down", "Left", "Right"]
         firstPersonModes = ["3D", "3DG"]
         topDownModes = ["2D"]
         if (self.mode in firstPersonModes):
@@ -1619,31 +1625,32 @@ class MazeGame(Animation):
         elif (event.keysym == "2"):
             self.mode = "3D"
             self.cameraVel = 0
+            self.sideCameraVel = 0
         elif (event.keysym == "3"):
             self.mode = "3DG"
             self.cameraVel = 0
+            self.sideCameraVel = 0
 
 
     def firstPersonKeyPressed(self, event):
         viewDir = Vector([self.camera.viewRay.dx, self.camera.viewRay.dy])
-        if (event.keysym == "Up"):
+        if ((event.keysym == "w") or (event.keysym=="Up")):
             self.cameraVel = self.speed 
-        elif (event.keysym == "Down"):
+        elif ((event.keysym == "s") or (event.keysym=="Down")):
             self.cameraVel = -self.speed
-        elif (event.keysym == "Right"):
+        elif ((event.keysym == "d") or (event.keysym=="Right")):
             # clockwise
             self.cameraRotVel = self.rotateSpeed
-        elif (event.keysym == "Left"):
+        elif ((event.keysym == "a") or (event.keysym=="Left")):
             # counter-clockwise
             self.cameraRotVel = - self.rotateSpeed
-        elif (event.keysym == "d"):
-            self.camera = Camera(Ray(Point(1.909,1.346),Point(2.01,1.356)))
-            for screenSeg in self.screenSegs:
-                cx = self.width/2
-                cy = self.height/2
-                sX = (self.width/CAM_WIDTH)
-                sY = (self.height/CAM_HEIGHT)
-                self.canvas.create_line(cx- sX*screenSeg.x1, cy-sY*screenSeg.h1, cx - sX*screenSeg.x2, cy-sY*screenSeg.h2,width=2)
+        elif ((event.keysym == "comma") or (event.keysym=="Prior")):
+            # Prior is page up
+            # sidestep left 
+            self.sideCameraVel = self.speed
+        elif ((event.keysym == "period") or (event.keysym=="Next")):
+            # Next is page down
+            self.sideCameraVel = - self.speed
 
     def topDownKeyPressed(self, event):
         if (event.keysym == "Up"):
@@ -1670,10 +1677,13 @@ class MazeGame(Animation):
             assert(False), "not a valid mode"
 
     def firstPersonKeyReleased(self, event):
-        translations = ["Up", "Down"]
-        rotations = ["Left", "Right"]
+        translations = ["w", "s", "Up", "Down"]
+        sideSteps = ["comma","period","Prior","Next"]
+        rotations = ["a", "d", "Left", "Right"]
         if (event.keysym in translations):
-           self.cameraVel = 0
+            self.cameraVel = 0
+        elif (event.keysym in sideSteps):
+            self.sideCameraVel = 0
         elif (event.keysym in rotations):
             self.cameraRotVel = 0
 
@@ -1701,24 +1711,26 @@ class MazeGame(Animation):
         rightcx = (2*self.width)/3
         cy = self.height/2
         self.canvas.create_text(cx,cy/3,text="3D Maze!",
-                                font="Helvetica 28")
+                                font="Helvetica 28",fill="white")
         self.canvas.create_text(cx,cy/2,
                                 text="Find the exit (the white cell)",
-                                font="Helvetica 24")
+                                font="Helvetica 24",fill="white")
         self.canvas.create_text(leftcx, cy, text="""
         To move
+        To sidestep
         To switch to 2D mode
                            3D mode
                            3D with glasses
         To toggle help
-        To restart""", font="Helvetica 18")
+        To restart""", font="Helvetica 18",fill="white")
         self.canvas.create_text(rightcx, cy, text="""
-        arrow keys
+        WASD or arrow keys
+        , and .
         1
         2
         3
         h
-        r""", font="Helvetica 18")
+        r""", font="Helvetica 18",fill="white")
 
         
 
@@ -1823,11 +1835,9 @@ class MazeGame(Animation):
         if (channel == "right"):
             screenSegs = self.screenSegs
             shift = "0,0"
-            otherShift = "0,1"
         else:
             screenSegs = self.secScreenSegs
             shift = "0,1"
-            otherShift = "0,0"
         for s in screenSegs:
             left = cx - s.x1*scaleX
             right = cx - s.x2*scaleX
@@ -1836,10 +1846,8 @@ class MazeGame(Animation):
             rightTop = cy + s.h2*scaleY
             rightBot = cy - s.h2*scaleY
             if (channel == "right"):
-                color = rightChannelColor(s.color)
                 outlineColor = hexColor(255,0,0)
             else:
-                color = leftChannelColor(s.color)
                 outlineColor = hexColor(0,255,255)
             self.canvas.create_line(left, leftTop, right, rightTop,
                                     stipple="gray50", offset=shift,
@@ -1856,11 +1864,11 @@ class MazeGame(Animation):
 
 
     def redraw3DG(self):
-        self.drawBackground()
+        self.drawBackground() # white
         self.draw3DGChannel("left")
         self.draw3DGChannel("right")
 
-game = MazeGame(14)
+game = MazeGame(14, 900, 600)
 game.run()
 
 
