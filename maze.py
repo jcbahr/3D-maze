@@ -14,7 +14,7 @@ CYCLE_AMOUNT = 5 # higher number -> fewer cycles
 CAM_HEIGHT = 0.125 # 0.15?
 CAM_WIDTH = 0.015
 CAM_LENGTH = 0.1
-CAM_SEP = 0.06
+CAM_SEP = 0.04
 WALL_H = 0.5
 CELL_SIZE = 40 # pixels
 DEBUG = False
@@ -119,7 +119,8 @@ def rightChannelColor(color):
 #    (red, green, blue) = rgbFromHex(color)
 #    gray = (red+green+blue)/3
 #    newGray = min(255, gray*2)
-    return hexColor(255, 50, 30)
+    return hexColor(255, 0, 0)
+    # 255, 40, 30
 
 def leftChannelColor(color):
     # cyan-tint color for right channel of
@@ -127,7 +128,8 @@ def leftChannelColor(color):
 #    (red, green, blue) = rgbFromHex(color)
 #    gray = (red+green+blue)/2
 #    newGray = min(255, gray*2)
-    return hexColor(05, 250, 245)
+    return hexColor(0, 255, 255)
+    # 5, 250, 245
 
 def shrinkScreenSeg(x, h, otherX, otherH):
     if (abs(x) > abs(h)):
@@ -1835,17 +1837,23 @@ class MazeGame(Animation):
             rightBot = cy - s.h2*scaleY
             if (channel == "right"):
                 color = rightChannelColor(s.color)
+                outlineColor = hexColor(255,0,0)
             else:
                 color = leftChannelColor(s.color)
-            self.canvas.create_polygon(left, leftTop, right, rightTop,
-                                       right, rightBot, left, leftBot,
-                                       fill=color,
-                                       outline=color,
-                                       outlinestipple="gray50",
-                                       outlineoffset=shift,
-                                       stipple="gray50",
-                                       offset=shift,
-                                       width=0)
+                outlineColor = hexColor(0,255,255)
+            self.canvas.create_line(left, leftTop, right, rightTop,
+                                    stipple="gray50", offset=shift,
+                                    fill=outlineColor,width=3)
+            self.canvas.create_line(right, rightTop, right, rightBot,
+                                    stipple="gray50", offset=shift,
+                                    fill=outlineColor,width=3)
+            self.canvas.create_line(right, rightBot, left, leftBot,
+                                    stipple="gray50", offset=shift,
+                                    fill=outlineColor,width=3)
+            self.canvas.create_line(left, leftBot, left, leftTop,
+                                    stipple="gray50", offset=shift,
+                                    fill=outlineColor,width=3)
+
 
     def redraw3DG(self):
         self.drawBackground()
