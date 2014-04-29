@@ -1849,6 +1849,7 @@ class MazeGame(Animation):
                                        outline="black")
 
     def draw3DGChannel(self, channel):
+        # the wireframe 3DG idea was Nick Goman's
         cx = self.width/2
         cy = self.height/2
         scaleX = (self.width / CAM_WIDTH)
