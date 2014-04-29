@@ -8,7 +8,6 @@ import math
 from Tkinter import *
 import random
 import time
-#random.seed(41)
 
 CYCLE_AMOUNT = 5 # higher number -> fewer cycles
 CAM_HEIGHT = 0.125
@@ -100,8 +99,8 @@ def makeColor(row, col, rows, cols):
         color = hexColor(255,255,255)
     else:
         green = 255*(row+col)/float(rows+cols)
-        red = 255*(row+col)/float(rows+cols)#255*(rows+cols-row-col)/float(rows+cols)
-        blue = 63
+        blue = 255*(rows+cols-row-col)/float(rows+cols)
+        red = 40
         color = hexColor(red, green, blue)
     return color
 
@@ -118,8 +117,9 @@ def rightChannelColor(color):
 #    (red, green, blue) = rgbFromHex(color)
 #    gray = (red+green+blue)/3
 #    newGray = min(255, gray*2)
+    # I could not get this to work, so I resorted
+    # to black/white (rather, red/cyan) for 3DG:
     return hexColor(255, 0, 0)
-    # 255, 40, 30
 
 def leftChannelColor(color):
     # cyan-tint color for right channel of
@@ -127,8 +127,9 @@ def leftChannelColor(color):
 #    (red, green, blue) = rgbFromHex(color)
 #    gray = (red+green+blue)/2
 #    newGray = min(255, gray*2)
+    # I could not get this to work, so I resorted
+    # to black/white (rather, red/cyan) for 3DG:
     return hexColor(0, 255, 255)
-    # 5, 250, 245
 
 def shrinkScreenSeg(x, h, otherX, otherH):
     if (abs(x) > abs(h)):
@@ -226,8 +227,6 @@ class Seg(object):
 
 class Ray(object):
     def __init__(self, eye, target):
-        #if (eye == target):
-        #    assert(False), "cannot make a ray from identical points"
         self.eye = eye
         self.dx = target.x - eye.x
         self.dy = target.y - eye.y
@@ -287,9 +286,6 @@ class Ray(object):
         newPoint = Point(newDir.elements[0], newDir.elements[1])
         newTarget = Point(newPoint.x + self.eye.x, newPoint.y + self.eye.y)
         newRay = Ray(self.eye, newTarget)
-        #newNorm = newRay.norm()
-        ## we *ensure* the magnitude of the ray is constant under rotation
-        #finalRay = newRay * (oldNorm / newNorm)
         return newRay
 
     def angleWithX(self):
@@ -370,8 +366,8 @@ class ScreenSeg(object):
     def __init__(self, cam, seg):
         self.color = seg.color
         # MUST be given a seg that is visible in the direction of the cam
-        # seg pruning must be done beforehand!
-        # follows is some linear algebra
+        # Seg pruning must be done beforehand!
+        # following is some linear algebra
         v1 = Ray(cam.viewRay.eye, seg.p1)
         v2 = Ray(cam.viewRay.eye, seg.p2)
 
@@ -599,60 +595,48 @@ def normNormHorizIntersect(cross1,cross2,seg):
     if (minCrossPoint.x <= minSegPoint.x):
         if (maxCrossPoint.x < minSegPoint.x):
             # nothing obscured
-            #print "nothing obscured"
             return set([seg])
         elif (maxCrossPoint.x < maxSegPoint.x):
             # obscured on left
-            #print "obscured on left"
             return set([Seg(maxCrossPoint, maxSegPoint, seg.color)])
         else:
             # entirely obscured
-            #print "entirely obscured"
             return set()
     elif (minCrossPoint.x < maxSegPoint.x):
         if (maxCrossPoint.x < maxSegPoint.x):
             # centrally obscured
-            #print "centrally obscured"
             return set([Seg(minSegPoint,minCrossPoint, seg.color),
                         Seg(maxCrossPoint,maxSegPoint, seg.color)])
         else:
             # obscured on right
-            #print "obscured on right"
             return set([Seg(minSegPoint,minCrossPoint, seg.color)])
     else:
         return set([seg])
 
 def normNormVertIntersect(cross1,cross2,seg):
-    #print "VERT"
     crossPoint1 = cross1.point
     crossPoint2 = cross2.point
     segSet = set([seg.p1, seg.p2])
     crossSet = set([crossPoint1, crossPoint2])
     (minSegPoint, maxSegPoint) = extremeY(segSet)
     (minCrossPoint, maxCrossPoint) = extremeY(crossSet)
-    #print "minCrossPt, minSegPt",minCrossPoint, minSegPoint
     if (minCrossPoint.y <= minSegPoint.y):
         if (maxCrossPoint.y < minSegPoint.y):
             # nothing obscured
-            #print "nothing obscured"
             return set([seg])
         elif (maxCrossPoint.y < maxSegPoint.y):
             # obscured on top
-            #print "obscured on top"
             return set([Seg(maxCrossPoint, maxSegPoint, seg.color)])
         else:
             # entirely obscured
-            #print "entirely obscured"
             return set()
     elif (minCrossPoint.y < maxSegPoint.y):
         if (maxCrossPoint.y < maxSegPoint.y):
             # centrally obscured
-            #print "centrally obscured"
             return set([Seg(minSegPoint,minCrossPoint, seg.color),
                         Seg(maxCrossPoint,maxSegPoint, seg.color)])
         else:
             # obscured on bottom
-            #print "obscured on bottom"
             return set([Seg(minSegPoint,minCrossPoint, seg.color)])
     else:
         return set([seg])
@@ -660,7 +644,6 @@ def normNormVertIntersect(cross1,cross2,seg):
 def normBehindIntersect(cross,behindCross,wall,seg):
     newCross = intersectWalls(wall,seg)
     newIntersection = Intersection(newCross, "normal")
-    #print newIntersection, cross
     return normNormIntersect(cross, newIntersection, wall, seg)
 
 def normBackIntersect(cross,backCross,wall,seg):
@@ -794,24 +777,20 @@ def behindBackIntersect(behindCross,backCross,wall,seg):
         assert(False), "seg should be vert or horiz"
 
 def behindBackVertIntersect(behindCross, backCross, wall, seg):
-    #print "vert"
     newCross = intersectWalls(wall, seg)
     crossSet = set([newCross, behindCross.point, backCross.point])
     (minCrossPoint, maxCrossPoint) = extremeY(crossSet)
     if (wall.p1.y > behindCross.point.y):
-        #print "wall crosses above"
         # wall crosses above
         # (could choose backCross, also)
         # quick check
         (botSegPoint,topSegPoint) = extremeY(set([seg.p1,seg.p2]))
         topPoint = extremeY(set([topSegPoint, newCross]))[0] # min
-        #print "new seg at", topPoint, botSegPoint
         if (botSegPoint.y >= topPoint.y):
             return set()
         else:
             return set([Seg(botSegPoint, topPoint, seg.color)])
     else:
-        #print "wall crosses below"
         (botSegPoint,topSegPoint) = extremeY(set([seg.p1,seg.p2]))
         botPoint = extremeY(set([botSegPoint, newCross]))[1] # max
         if (topSegPoint.y <= botPoint.y):
@@ -935,13 +914,9 @@ def obstructSeg(eye, wall, seg):
         # something obscured entire segment
         # NOTE: There is a small side effect, since
         # the entire seg is returned even if the obstruction lies behind
-        # however, the seg must be viewed straight on, so in the 3D case,
-        # it is equivalent
+        # however, the seg must be viewed straight on for this to happen
+        #, so in the 3D case, it doesn't matter
         return set()
-    #print "\t\tCurrently Obstructing", seg
-    #print "\t\twith wall", wall
-    #print "\t\tAt intersections", cross1.point, cross1.kind
-    #print "\t\t             and", cross2.point, cross2.kind
     return obstructViaIntersections(cross1, cross2, wall, seg)
 
 def obstructSegViaSegSet(eye, segSet, seg):
@@ -953,19 +928,12 @@ def obstructSegViaSegSet(eye, segSet, seg):
     if (type(segSet) != set): assert(False), "segSet not of type set"
     if (type(eye) != Point): assert(False), "eye not a Point"
     remainingPieces = set([seg])
-    #print "Now obstructing the seg", seg
     newPieces = set()
     for wall in segSet:
         for piece in remainingPieces:
-            #print "\tObstructing the piece", piece
-            #print "\tagainst", wall
-            p = obstructSeg(eye, wall, piece)
-            #print "\tRemainder:",p
-            #print "\tthat was the remainder"
-            newPieces = newPieces | p # obstructSeg(eye, wall, piece) # union
+            newPieces = newPieces | obstructSeg(eye, wall, piece) # union
         remainingPieces = newPieces
         newPieces = set()
-    #print "The remaining pieces of were", remainingPieces
     return remainingPieces
 
 
@@ -975,8 +943,6 @@ def obstructSegs(eye, segSet):
     visible = set()
     for seg in segSet:
         otherSegs = segSet - set([seg])
-        #otherSegs = copy.copy(segSet)
-        #otherSegs.remove(seg)
         visible = visible.union(obstructSegViaSegSet(eye, otherSegs, seg))
     return visible
 
@@ -1071,7 +1037,6 @@ class Maze(object):
         (fromVal, toVal) = (max(cellVal1, cellVal2), min(cellVal1, cellVal2))
         for row in xrange(cRows):
             for col in xrange(cCols):
-                #print row, col, cRows, cCols
                 if (self.cells[row][col] == fromVal):
                     self.cells[row][col] = toVal
 
@@ -1089,11 +1054,9 @@ class Maze(object):
         # kosbie.net/cmu/fall-12/15-112/handouts/notes-recursion/mazeSolver.py
         (rows, cols) = (self.rows, self.cols)
         (cRows, cCols) = (rows-1, cols-1)
-        #print "(cRows,cCols) = ", (cRows, cCols)
         while (not self.isFinishedMaze()):
             cRow = random.randint(0, cRows-1)
             cCol = random.randint(0, cCols-1)
-            #print "\t",(cRow,cCol)
             curCell = self.cells[cRow][cCol]
             if flipCoin(): # try to go east
                 if (cCol == cCols - 1): continue # at edge
@@ -1115,12 +1078,8 @@ class Maze(object):
                     continue
                 else:
                     self.removeSeg(dividingSeg, curCell, targetCell)
-            #print self.cells
-            #time.sleep(0.5)
-            #print self.isFinishedMaze()
 
     def deadCornerCell(self, row, col, dir):
-        #print (row,col)
         (rows, cols) = (self.rows, self.cols)
         (cRows, cCols) = (rows - 1, cols - 1)
         if (dir == "UL"):
@@ -1165,8 +1124,6 @@ class Maze(object):
             for row in xrange(eyeRow-1, -1, -1):
                 for col in xrange(eyeCol-1, -1, -1):
                     if (self.deadCornerCell(row, col, "DL")):
-                        #print "DL-DEAD ->", (row,col)
-                        #print "DL"
                         if (self.cells[row][col] != 0):
                             self.cells[row][col] = 0 # dead
                             culledFlag = True
@@ -1175,24 +1132,14 @@ class Maze(object):
             for row in xrange(eyeRow-1, -1, -1):
                 for col in xrange(eyeCol+1, cCols):
                     if (self.deadCornerCell(row, col, "DR")):
-                        #print "DR-DEAD ->", (row,col)
-                        #print "DR"
                         if (self.cells[row][col] != 0):
                             self.cells[row][col] = 0 # dead
                             culledFlag = True
         # top left
         if ((eyeRow != cRows) and (eyeCol != 0)):
-            #print "HEY, IN UL NOW"
-            #print "eyeRow, cRows", eyeRow, cRows
-            #print "eyeCol", eyeCol
             for row in xrange(eyeRow+1, cRows):
-                #print "row", row
                 for col in xrange(eyeCol-1, -1, -1):
-                    #print "col"
-                    #print "UL row,col",(row,col)
                     if (self.deadCornerCell(row, col, "UL")):
-                        #print "UL-DEAD ->", (row,col)
-                        #print "UL"
                         if (self.cells[row][col] != 0):
                             self.cells[row][col] = 0 # dead
                             culledFlag = True
@@ -1201,8 +1148,6 @@ class Maze(object):
             for row in xrange(eyeRow+1, cRows):
                 for col in xrange(eyeCol+1, cCols):
                     if (self.deadCornerCell(row, col, "UR")):
-                        #print "UR-DEAD ->", (row,col)
-                        #print "UR"
                         if (self.cells[row][col] != 0):
                             self.cells[row][col] = 0 # dead
                             culledFlag = True
@@ -1219,14 +1164,12 @@ class Maze(object):
                 if (self.cells[row][col] == self.cells[row][col+1] == 0):
                     deadSeg = Seg(Point(col+1, row), Point(col+1, row+1))
                     if (deadSeg in self.checkSegs):
-                        #print "REMOVED",deadSeg
                         self.checkSegs.remove(deadSeg)
         # check far right
         for row in xrange(cRows):
             if (self.cells[row][cCols-1] == 0):
                 deadSeg = Seg(Point(cCols+1, row), Point(cCols+1, row+1))
                 if (deadSeg in self.checkSegs):
-                    #print "FAR RIGHT"
                     self.checkSegs.remove(deadSeg)
         # check up
         for row in xrange(cRows - 1):
@@ -1234,14 +1177,12 @@ class Maze(object):
                 if (self.cells[row][col] == self.cells[row+1][col] == 0):
                     deadSeg = Seg(Point(col, row+1), Point(col+1, row+1))
                     if (deadSeg in self.checkSegs):
-                        #print "REMOVED",deadSeg
                         self.checkSegs.remove(deadSeg)
         # check far top
         for col in xrange(cCols):
             if (self.cells[cRows-1][col] == 0):
                 deadSeg = Seg(Point(col, cRows+1), Point(col+1, cRows+1))
                 if (deadSeg in self.checkSegs):
-                    #print "FAR TOP"
                     self.checkSegs.remove(deadSeg)
         return None
                         
@@ -1265,35 +1206,22 @@ class Maze(object):
         # destructive function
         (rows, cols) = (self.rows, self.cols)
         (cRows, cCols) = (rows - 1, cols - 1)
-        #print "delRow, delCol",(delRow, delCol)
-        #print "cRows, cCols", (cRows, cCols)
         if ((delRow == cRows) or (delRow < 0) or
             (delCol == cCols) or (delCol < 0)):
             # out of bounds
-        #    print "OUT OF BOUNDS"
             return None
         if (dir == "left"):
-        #    print "... too theeee lleeffttt"
             for col in xrange(0, delCol+1):
-        #        print "left -> ", delRow, col
                 self.cells[delRow][col] = 0
-        #    print self.cells
         elif (dir == "right"):
-        #    print "... too theeee rriiggthhtt"
             for col in xrange(delCol, cCols):
-        #        print "right -> ", delRow, col
                 self.cells[delRow][col] = 0
-        #    print self.cells
         elif (dir == "down"):
             for row in xrange(0, delRow+1):
-        #        print "down -> ", row, delCol
                 self.cells[row][delCol] = 0
-        #    print self.cells
         elif (dir == "up"):
             for row in xrange(delRow, cRows):
-        #        print "up -> ", row, delCol
                 self.cells[row][delCol] = 0
-        #    print self.cells
         else:
             assert(False), "not a direction"
 
@@ -1310,25 +1238,20 @@ class Maze(object):
         (cRows, cCols) = (rows - 1, cols - 1)
         self.initCellsAsOne()
         self.checkSegs = copy.copy(self.segs)
-        #print self.cells
         for col in xrange(eyeCol, cCols):
             if self.hasSeg(eyeRow, col, "right"):
-                #print "RIGHT"
                 self.deleteCellsInDir(eyeRow, col+1, "right")
                 break
         for col in xrange(eyeCol, -1, -1):
             if self.hasSeg(eyeRow, col, "left"):
-                #print "LEFT"
                 self.deleteCellsInDir(eyeRow, col-1, "left")
                 break
         for row in xrange(eyeRow, cRows):
             if self.hasSeg(row, eyeCol, "up"):
-                #print "UP"
                 self.deleteCellsInDir(row+1, eyeCol, "up")
                 break
         for row in xrange(eyeRow, -1, -1):
             if self.hasSeg(row, eyeCol, "down"):
-                #print "DOWN"
                 self.deleteCellsInDir(row-1, eyeCol, "down")
                 break
         while(self.cullCorners(eye)):
@@ -1337,9 +1260,6 @@ class Maze(object):
             pass
         self.removeDeadSandwichedSegs()
         # will remove segs sandwiched between dead cells
-        #print "\n\n####################################"
-        #print self.cells
-        #print eye
         return set(self.checkSegs)
 
 
@@ -1399,7 +1319,6 @@ class Animation(object):
 ################################################################################
 
 
-# TODO: Move animation functions into MazeGame class
 class MazeGame(Animation):
     def __init__(self, mazeSize, width=700, height=500):
         self.mazeRows = mazeSize
@@ -1723,7 +1642,6 @@ class MazeGame(Animation):
 #                                offset="0,1")
 
     def drawHelp(self):
-        #self.canvas.delete(ALL)
         cx = self.width/2
         leftcx = self.width/3
         rightcx = (2*self.width)/3
@@ -1814,8 +1732,8 @@ class MazeGame(Animation):
                                      fill=background, width=0)
 
     def drawGround(self):
-        #brown = hexColor(123, 112, 0)
-        brown = hexColor(163, 130, 41) # better for red/cyan anaglyph
+        brown = hexColor(123, 112, 0)
+        #brown = hexColor(163, 130, 41) # alternative
         cy = self.height/2
         self.canvas.create_rectangle(0, cy, self.width, self.height,
                                      fill=brown, width=0)
@@ -1823,8 +1741,8 @@ class MazeGame(Animation):
 
     def drawSky(self):
         #blue = hexColor(130,202,250) # light sky blue
-        #blue = hexColor(112,172,255) # sky blue
-        blue = hexColor(160,191,235) # better for red/cyan anaglyph
+        blue = hexColor(112,172,255) # sky blue
+        #blue = hexColor(160,191,235) # alternative
         cy = self.height/2
         self.canvas.create_rectangle(0, 0, self.width, cy,
                                      fill=blue, width=0)
