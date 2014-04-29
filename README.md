@@ -31,8 +31,8 @@ choose.
 
 By default, 3D-maze will run in 1366x768 and generate a maze with 15x15 walls.
 To change this, edit the line `game = MazeGame(15,1366,768)`.  Replace `15`
-with the desired width and height of the maze; replace 1366 with the desired
-width of the window, and replace 768 with the desired height of the window.
+with the desired width and height of the maze; replace `1366` with the desired
+width of the window, and replace `768` with the desired height of the window.
 
 In order to change the amount of "cycles" the maze contains, edit the global
 `CYCLE_AMOUNT` at the top of the file AT YOUR OWN RISK.  It must be a
