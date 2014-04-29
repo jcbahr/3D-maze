@@ -11,14 +11,13 @@ import time
 #random.seed(41)
 
 CYCLE_AMOUNT = 5 # higher number -> fewer cycles
-CAM_HEIGHT = 0.125 # 0.15?
+CAM_HEIGHT = 0.125
 CAM_WIDTH = 0.015
 CAM_LENGTH = 0.1
 CAM_SEP = 0.04
 WALL_H = 0.5
 CELL_SIZE = 40 # pixels
 DEBUG = False
-LARGE = 99
 FOV = math.pi/2
 
 ################################################################################
@@ -1698,11 +1697,30 @@ class MazeGame(Animation):
 ######################
 
     def drawGameOver(self):
-        #self.canvas.delete(ALL)
         cx = self.width/2
         cy = self.height/2
         self.canvas.create_text(cx, cy, text="You Win!",
                                 font="Helvetica 36 bold")
+
+    def draw3DGGameOver(self):
+        # If you find yourself on a system where Tkinter text
+        # stippling works, then comment out:
+        self.drawGameOver()
+        # and uncomment the remainder of this function 
+        # (and install the dejavu font)
+#        cxLeft = self.width * (49.5/100)
+#        cxRight = self.width * (50.5/100)
+#        cy = self.height/2
+#        self.canvas.create_text(cxLeft, cy, text="You Win!",
+#                                font=("dejavu sans light", 36),
+#                                stipple="gray50",
+#                                fill=None,
+#                                offset="0,0")
+#        self.canvas.create_text(cxRight, cy, text="You Win!",
+#                                font=("dejavu sans light", 36),
+#                                stipple="gray50",
+#                                fill=hexColor(0,255,255),
+#                                offset="0,1")
 
     def drawHelp(self):
         #self.canvas.delete(ALL)
@@ -1748,7 +1766,10 @@ class MazeGame(Animation):
         if (self.isHelp):
             self.drawHelp()
         elif (self.isGameOver):
-            self.drawGameOver()
+            if (self.mode == "3DG"):
+                self.draw3DGGameOver()
+            else:
+                self.drawGameOver()
 
     def redraw2D(self):
         eye = self.camera.viewRay.eye
@@ -1868,7 +1889,7 @@ class MazeGame(Animation):
         self.draw3DGChannel("left")
         self.draw3DGChannel("right")
 
-game = MazeGame(14, 900, 600)
+game = MazeGame(15, 1366, 768)
 game.run()
 
 
