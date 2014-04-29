@@ -47,6 +47,7 @@ Features
 * a 2D top-down mode where only portions of walls visible in 360° are shown
 * a 3D first-person mode
 * a 3D red-cyan anaglyph mode 
+
 In the first two modes, the segments are colored from a blueish to bright
 green.  The goal is to follow the direction of increasing green and reach the
 white cell in the far corner of the maze.
