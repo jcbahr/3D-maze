@@ -1,7 +1,8 @@
 #!/bin/env pypy
 
-# lines-oop.py
-# line intersection (an object oriented version)
+# 3D-maze
+# maze.py
+
 
 import copy
 import math
@@ -10,8 +11,13 @@ import random
 import time
 
 CYCLE_AMOUNT = 5 # higher number -> fewer cycles
+
+# if you change the resolution,
+# you may need to slightly alter the following two:
 CAM_HEIGHT = 0.125
 CAM_WIDTH = 0.015
+
+# do not edit these:
 CAM_LENGTH = 0.1
 CAM_SEP = 0.04
 WALL_H = 0.5
