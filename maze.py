@@ -1535,6 +1535,7 @@ class MazeGame(Animation):
         else:
             self.isHelp = False
         if (event.keysym == "r"):
+            self.mode = "3D"
             self.init()
             self.isHelp = False
             # restart
