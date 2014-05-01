@@ -1652,7 +1652,7 @@ class MazeGame(Animation):
         leftcx = self.width/3
         rightcx = (2*self.width)/3
         cy = self.height/2
-        self.canvas.create_text(cx,cy/3,text="3D Maze!",
+        self.canvas.create_text(cx,cy*(2./9.),text="3D Maze!",
                                 font="Helvetica 28",fill="white")
         self.canvas.create_text(cx,cy/2,
                                 text="""Find the far corner (the white cell)
@@ -1722,17 +1722,11 @@ The maze will get greener""",
     def draw2DEye(self, left, top):
         eye = self.camera.viewRay.eye
         target = self.camera.viewRay.target
-        leftEye = left + CELL_SIZE*eye.x - 1
-        rightEye = left + CELL_SIZE*eye.x + 1
-        topEye = top + CELL_SIZE*eye.y - 1
-        botEye = top + CELL_SIZE*eye.y + 1
-        self.canvas.create_oval(leftEye, topEye, rightEye, botEye)
-        leftTarget = left + CELL_SIZE*target.x - 1
-        rightTarget = left + CELL_SIZE*target.x + 1
-        topTarget = top + CELL_SIZE*target.y - 1
-        botTarget = top + CELL_SIZE*target.y + 1
-        self.canvas.create_oval(leftTarget, topTarget, rightTarget, botTarget,
-                                fill="blue")
+        x1 = left + CELL_SIZE*eye.x
+        y1 = top + CELL_SIZE*eye.y
+        x2 = left + CELL_SIZE*target.x
+        y2 = top + CELL_SIZE*target.y
+        self.canvas.create_line(x1, y1, x2, y2, arrow="last", fill="blue")
 
     def drawBackground(self):
         background = hexColor(255,255,255) # better for red/cyan anaglyph
@@ -1821,7 +1815,8 @@ The maze will get greener""",
         self.draw3DGChannel("left")
         self.draw3DGChannel("right")
 
-game = MazeGame(14, 1366, 768)
+#game = MazeGame(14, 1366, 768)
+game = MazeGame(4,800,600)
 game.run()
 
 
