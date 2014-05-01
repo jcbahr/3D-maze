@@ -1504,8 +1504,8 @@ class MazeGame(Animation):
         cam1 = self.camera
         cam2 = self.secondCamera
         for seg in self.circularVisibleSegs:
-            if (seg.withinDist(cam1.viewRay.eye,1.4*self.cameraLength) or
-                (seg.withinDist(cam2.viewRay.eye, 1.4*self.cameraLength))):
+            if (seg.withinDist(cam1.viewRay.eye,1.2*self.cameraLength) or
+                (seg.withinDist(cam2.viewRay.eye, 1.2*self.cameraLength))):
                 return False
         return True
 
@@ -1521,7 +1521,6 @@ class MazeGame(Animation):
         pass
 
     def keyPressed(self, event):
-        self.isHelp = False
         firstPersonModes = ["3D", "3DG"]
         topDownModes = ["2D"]
         if (self.mode in firstPersonModes):
@@ -1533,6 +1532,8 @@ class MazeGame(Animation):
         if (event.keysym == "h"):
             # toggle help screen
             self.isHelp = not self.isHelp
+        else:
+            self.isHelp = False
         if (event.keysym == "r"):
             self.init()
             self.isHelp = False
@@ -1571,15 +1572,19 @@ class MazeGame(Animation):
             self.sideCameraVel = - self.speed
 
     def topDownKeyPressed(self, event):
-        if (event.keysym == "Up"):
+        up = ["Up", "w"]
+        down = ["Down", "s"]
+        left = ["Left", "a"]
+        right = ["Right", "d"]
+        if (event.keysym in up):
             # up is down in TkInter
             self.cameraVel = self.speed * Vector([0,-1])
-        elif (event.keysym == "Down"):
+        elif (event.keysym in down):
             # up is down in TkInter
             self.cameraVel = self.speed * Vector([0,1])
-        elif (event.keysym == "Right"):
+        elif (event.keysym in right):
             self.cameraVel = self.speed * Vector([1,0])
-        elif (event.keysym == "Left"):
+        elif (event.keysym in left):
             self.cameraVel = self.speed * Vector([-1,0])
         # ensure no more rotation
         self.cameraRotVel = 0
@@ -1606,7 +1611,8 @@ class MazeGame(Animation):
             self.cameraRotVel = 0
 
     def topDownKeyReleased(self, event):
-        translations = ["Up", "Down", "Left", "Right"]
+        translations = ["Up", "Down", "Left", "Right",
+                        "w", "a", "s", "d"]
         if (event.keysym in translations):
             self.cameraVel = Vector([0,0])
 
@@ -1649,8 +1655,10 @@ class MazeGame(Animation):
         self.canvas.create_text(cx,cy/3,text="3D Maze!",
                                 font="Helvetica 28",fill="white")
         self.canvas.create_text(cx,cy/2,
-                                text="Find the exit (the white cell)",
-                                font="Helvetica 24",fill="white")
+                                text="""Find the far corner (the white cell)
+The maze will get greener""",
+                                font="Helvetica 24",fill="white",
+                                justify=CENTER)
         self.canvas.create_text(leftcx, cy, text="""
         To move
         To sidestep
@@ -1661,7 +1669,7 @@ class MazeGame(Animation):
         To restart""", font="Helvetica 18",fill="white")
         self.canvas.create_text(rightcx, cy, text="""
         WASD or arrow keys
-        , and .
+        ,/. or PgUp/PgDown
         1
         2
         3
@@ -1789,6 +1797,11 @@ class MazeGame(Animation):
                 outlineColor = hexColor(255,0,0)
             else:
                 outlineColor = hexColor(0,255,255)
+            if (s.color == "#ffffff"):
+                endColor = "#bbffbb"
+                self.canvas.create_polygon(left, leftTop, right, rightTop,
+                                           right, rightBot, left, leftBot,
+                                           width=0, fill=endColor)
             self.canvas.create_line(left, leftTop, right, rightTop,
                                     stipple="gray50", offset=shift,
                                     fill=outlineColor,width=3)
@@ -1808,7 +1821,7 @@ class MazeGame(Animation):
         self.draw3DGChannel("left")
         self.draw3DGChannel("right")
 
-game = MazeGame(15, 1366, 768)
+game = MazeGame(14, 1366, 768)
 game.run()
 
 
