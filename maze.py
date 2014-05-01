@@ -1815,8 +1815,7 @@ The maze will get greener""",
         self.draw3DGChannel("left")
         self.draw3DGChannel("right")
 
-#game = MazeGame(14, 1366, 768)
-game = MazeGame(4,800,600)
+game = MazeGame(10, 1366, 768)
 game.run()
 
 
